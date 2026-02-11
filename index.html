@@ -1,0 +1,2506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>标准物质管理助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    
+    <script>
+        // ========================================
+        // Supabase 配置
+        // ========================================
+        const SUPABASE_URL = 'https://jgyopzakcuvvhzlplngx.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_H48vaYEOM84Z7RvPgETXgA_LH8tsztD';
+
+        // 初始化 Supabase 客户端
+        let supabase;
+        let currentUser = null;
+
+        // 初始化
+        async function initSupabase() {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            // 检查是否有登录用户
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                showApp();
+            }
+
+            // 监听认证状态变化
+            supabase.auth.onAuthStateChange((event, session) => {
+                if (event === 'SIGNED_IN' && session) {
+                    currentUser = session.user;
+                    showApp();
+                } else if (event === 'SIGNED_OUT') {
+                    currentUser = null;
+                    showLoginPage();
+                }
+            });
+        }
+
+        // 调试日志
+        function debugLog(message, data = '') {
+            console.log(`[DEBUG] ${message}`, data);
+            const debugPanel = document.getElementById('debugContent');
+            if (debugPanel) {
+                const timestamp = new Date().toLocaleTimeString();
+                debugPanel.innerHTML += `<div>[${timestamp}] ${message} ${JSON.stringify(data)}</div>`;
+            }
+        }
+
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6', primaryDark: '#2563eb',
+                        success: '#22c55e', danger: '#ef4444',
+                        warning: '#f59e0b', info: '#0ea5e9',
+                        background: '#f1f5f9', surface: '#ffffff'
+                    }
+                }
+            }
+        };
+    </script>
+    
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { height: 100%; margin: 0; padding: 0; }
+        body { font-family: 'Inter', 'PingFang SC', sans-serif; background: #f1f5f9; }
+        
+        .page { display: none; min-height: 100vh; padding-bottom: 80px; }
+        .page.active { display: block; }
+        
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 1rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
+        }
+        
+        .content { margin-top: 4.5rem; padding: 1rem; }
+        
+        .card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .stat-icon {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        
+        .quick-action-btn {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .quick-action-btn:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem;
+            color: #64748b;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .nav-item.active { color: #3b82f6; }
+        .nav-item i { font-size: 1.25rem; margin-bottom: 0.25rem; }
+        .nav-item span { font-size: 0.75rem; }
+        
+        .footer {
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .modal.show { display: flex; }
+        
+        .modal-content {
+            background: white;
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 28rem;
+            max-height: 90vh;
+            overflow: hidden;
+            animation: modalSlideUp 0.3s ease;
+        }
+        
+        @keyframes modalSlideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-header {
+            background: #3b82f6;
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .tab-btn.active {
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.625rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background: #d1d5db; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-warning { background: #f59e0b; color: white; }
+        
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-normal { background: #dcfce7; color: #166534; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+        .status-danger { background: #fee2e2; color: #991b1b; }
+        .status-info { background: #dbeafe; color: #1e40af; }
+        
+        .stock-group { border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; margin-bottom: 1rem; }
+        .stock-group-header { background: #f8fafc; padding: 1rem; cursor: pointer; }
+        .stock-item { border-bottom: 1px solid #f1f5f9; padding: 1rem; }
+        .stock-item:last-child { border-bottom: none; }
+        
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .activity-item:last-child { border-bottom: none; }
+        
+        .message-item {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+            background: white;
+        }
+        
+        .message-item:hover { 
+            background: #f8fafc; 
+transform: translateX(4px);
+        }
+        
+        .message-item.unread { 
+            background: #eff6ff; 
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .message-item.read {
+            background: white;
+            border-left: 4px solid transparent;
+            opacity: 0.9;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .message-sender {
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        
+        .message-content {
+            color: #374151;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+        
+        .message-to {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed #e2e8f0;
+        }
+        
+        .unread-badge {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        
+        .personnel-item { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
+        .personnel-item:last-child { border-bottom: none; }
+        
+        .record-item { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
+        .record-item:last-child { border-bottom: none; }
+        
+        .setting-item { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; }
+        .setting-item:last-child { border-bottom: none; }
+        
+        .login-container {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 420px;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -0.25rem;
+            right: -0.25rem;
+            background: #ef4444;
+            color: white;
+            font-size: 0.625rem;
+            min-width: 1rem;
+            height: 1rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 0.25rem;
+        }
+        
+        .empty-state { text-align: center; padding: 2rem; color: #9ca3af; }
+        
+        .image-preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+        .image-preview-item { position: relative; }
+        .image-preview-item img { width: 100%; height: 6rem; object-fit: cover; border-radius: 0.375rem; }
+        
+        .tab-nav { display: flex; border-bottom: 1px solid #e2e8f0; margin-bottom: 1rem; }
+        .tab-nav-item { flex: 1; padding: 0.75rem; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab-nav-item.active { border-bottom-color: #3b82f6; color: #3b82f6; font-weight: 600; }
+        
+        .record-images {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .record-image-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 0.375rem;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .record-image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .record-image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 0.75rem;
+        }
+        
+        .image-viewer-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .image-viewer-modal.show { display: flex; }
+        
+        .image-viewer-content {
+            max-width: 90%;
+            max-height: 90%;
+        }
+        
+        .image-viewer-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            top: 80px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 9999;
+            max-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .debug-toggle {
+            position: fixed;
+            top: 80px;
+            right: 10px;
+            background: #3b82f6;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 9998;
+            cursor: pointer;
+        }
+        
+        .message-detail-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 60;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .message-detail-modal.show { display: flex; }
+        
+        .message-detail-content {
+            background: white;
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+    </style>
+</head>
+<body onload="initSupabase()">
+    <!-- 调试工具 -->
+    <div class="debug-toggle" onclick="toggleDebug()">🔧 调试</div>
+    <div id="debugPanel" class="debug-panel">
+        <h4 class="text-white mb-2">调试信息</h4>
+        <div id="debugContent"></div>
+        <button onclick="loadDemoData()" class="mt-2 bg-green-600 text-white px-2 py-1 rounded text-xs">加载演示数据</button>
+    </div>
+
+    <!-- 登录页面 -->
+    <div id="loginPage" class="page active" style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #1e40af 100%);">
+        <div class="login-container">
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="fa fa-cubes text-4xl text-white"></i>
+                </div>
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-500 to-blue-700 bg-clip-text text-transparent">标准物质管理助手</h1>
+                <p class="text-gray-500 mt-1">Supabase 云端版 v1.0.0</p>
+            </div>
+            
+            <div id="loginError" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg mb-4 text-sm"></div>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                    <div class="relative">
+                        <input type="text" id="loginUsername" class="form-input pl-10" placeholder="请输入用户名" required>
+                        <i class="fa fa-user absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <div class="relative">
+                        <input type="password" id="loginPassword" class="form-input pl-10 pr-10" placeholder="请输入密码" required>
+                        <i class="fa fa-lock absolute left-3 top-3 text-gray-400"></i>
+                        <button type="button" onclick="togglePassword()" class="absolute right-3 top-3 text-gray-400">
+                            <i class="fa fa-eye" id="passwordToggleIcon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="rememberMe" class="w-4 h-4 text-primary rounded">
+                        <span class="ml-2 text-sm text-gray-600">记住我</span>
+                    </label>
+                </div>
+                
+                <button type="submit" class="w-full btn btn-primary py-3 text-base">
+                    <i class="fa fa-sign-in mr-2"></i>登录
+                </button>
+            </form>
+            
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p class="text-center text-sm text-gray-500 mb-2">测试账号</p>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between bg-blue-100 text-blue-800 px-3 py-2 rounded">
+                        <span>管理员</span>
+                        <span class="font-mono">admin / admin123</span>
+                    </div>
+                    <div class="flex justify-between bg-green-100 text-green-800 px-3 py-2 rounded">
+                        <span>操作员</span>
+                        <span class="font-mono">user1 / user123</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="connectionStatus" class="mt-4 text-center text-sm text-gray-500">
+                <i class="fa fa-circle text-green-500 mr-1"></i>已连接 Supabase
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用容器 -->
+    <div id="appContainer" style="display: none;">
+        <!-- 头部 -->
+        <div class="header flex items-center justify-between">
+            <h1 id="pageTitle" class="text-xl font-bold flex items-center">
+                <i class="fa fa-cubes mr-2"></i>
+                <span>标准物质管理</span>
+            </h1>
+            <div class="flex items-center space-x-4">
+                <button onclick="openNotificationModal()" class="relative p-2">
+                    <i class="fa fa-bell-o text-xl"></i>
+                    <span id="notificationCount" class="notification-badge hidden">0</span>
+                </button>
+                <button onclick="showScanModal()" class="p-2">
+                    <i class="fa fa-qrcode text-xl"></i>
+                </button>
+                <button onclick="logout()" class="flex items-center p-2">
+                    <i class="fa fa-user-circle text-xl mr-1"></i>
+                    <span id="currentUserName" class="text-sm">管理员</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 内容区域 -->
+        <div class="content">
+            <!-- 首页 -->
+            <div id="dashboardPage" class="page active">
+                <!-- 统计卡片 -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="stat-card">
+                        <div>
+                            <p class="text-sm text-gray-500">总库存</p>
+                            <p id="totalStock" class="text-3xl font-bold text-primary">0</p>
+                        </div>
+                        <div class="stat-icon bg-blue-100">
+                            <i class="fa fa-cubes text-primary"></i>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div>
+                            <p class="text-sm text-gray-500">近效期预警</p>
+                            <p id="expiryWarning" class="text-3xl font-bold text-warning">0</p>
+                        </div>
+                        <div class="stat-icon bg-yellow-100">
+                            <i class="fa fa-exclamation-triangle text-warning"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 库存状态图表 -->
+                <div class="card">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-pie-chart text-primary mr-2"></i>
+                        库存状态分布
+                    </h2>
+                    <div class="h-56">
+                        <canvas id="stockStatusChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 快速操作 -->
+                <div class="card">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-bolt text-warning mr-2"></i>
+                        快速操作
+                    </h2>
+                    <div class="grid grid-cols-4 gap-4">
+                        <div class="quick-action-btn" onclick="showAddStockModal()">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fa fa-archive text-primary text-xl"></i>
+                            </div>
+                            <span class="text-xs text-gray-600">入库</span>
+                        </div>
+                        <div class="quick-action-btn" onclick="showOutStockModal()">
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fa fa-sign-out text-success text-xl"></i>
+                            </div>
+                            <span class="text-xs text-gray-600">出库</span>
+                        </div>
+                        <div class="quick-action-btn" onclick="switchPage('stock')">
+                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fa fa-list text-purple-600 text-xl"></i>
+                            </div>
+                            <span class="text-xs text-gray-600">库存</span>
+                        </div>
+                        <div class="quick-action-btn" onclick="switchPage('records')">
+                            <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-2">
+                                <i class="fa fa-history text-gray-600 text-xl"></i>
+                            </div>
+                            <span class="text-xs text-gray-600">记录</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 最近活动 -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa fa-clock-o text-info mr-2"></i>
+                            最近活动
+                        </h2>
+                        <button onclick="switchPage('records')" class="text-primary text-sm hover:underline">查看全部</button>
+                    </div>
+                    <div id="recentActivities">
+                        <div class="empty-state">
+                            <i class="fa fa-inbox text-4xl mb-2"></i>
+                            <p>暂无活动记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 库存页面 -->
+            <div id="stockPage" class="page">
+                <!-- 搜索栏 -->
+                <div class="card mb-4">
+                    <div class="relative">
+                        <input type="text" id="stockSearchInput" placeholder="搜索标准物质..." class="form-input pl-10" oninput="renderStockList()">
+                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- 标签页 -->
+                <div class="tab-nav">
+                    <div class="tab-nav-item active" onclick="switchStockTab('all', this)">全部</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('normal', this)">正常</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('warning', this)">即将过期</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('expired', this)">已过期</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('low', this)">库存不足</div>
+                </div>
+
+                <!-- 库存列表 -->
+                <div id="stockList">
+                    <div class="empty-state">
+                        <i class="fa fa-spinner fa-spin text-4xl mb-2"></i>
+                        <p>加载中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 人员页面 -->
+            <div id="personnelPage" class="page">
+                <div class="card mb-4">
+                    <div class="relative">
+                        <input type="text" id="personnelSearchInput" placeholder="搜索人员..." class="form-input pl-10" oninput="renderPersonnelList()">
+                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">人员列表</h2>
+                    <button onclick="showAddPersonnelModal()" class="btn btn-primary">
+                        <i class="fa fa-plus mr-1"></i>添加
+                    </button>
+                </div>
+
+                <div id="personnelList" class="card">
+                    <div class="empty-state">
+                        <i class="fa fa-users text-4xl mb-2"></i>
+                        <p>暂无人员数据</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 记录页面 -->
+            <div id="recordsPage" class="page">
+                <div class="card mb-4">
+                    <div class="relative">
+                        <input type="text" id="recordsSearchInput" placeholder="搜索记录..." class="form-input pl-10" oninput="renderRecordsList()">
+                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div id="recordsList" class="card">
+                    <div class="empty-state">
+                        <i class="fa fa-history text-4xl mb-2"></i>
+                        <p>暂无操作记录</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置页面 -->
+            <div id="settingsPage" class="page">
+                <!-- 个人信息 -->
+                <div class="card mb-4">
+                    <div class="flex items-center">
+                        <div class="w-16 h-16 bg-primary text-white rounded-full flex items-center justify-center text-2xl font-bold mr-4">
+                            <span id="settingUserInitial">管</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold" id="settingUserName">管理员</h2>
+                            <p class="text-sm text-gray-500" id="settingUserRole">系统管理员</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 设置项 -->
+                <div class="card">
+                    <div class="setting-item" onclick="showChangePasswordModal()">
+                        <div class="flex items-center">
+                            <i class="fa fa-lock text-primary mr-3"></i>
+                            <span>修改密码</span>
+                        </div>
+                        <i class="fa fa-chevron-right text-gray-400"></i>
+                    </div>
+                    <div class="setting-item" onclick="exportData()">
+                        <div class="flex items-center">
+                            <i class="fa fa-download text-success mr-3"></i>
+                            <span>数据导出(Excel)</span>
+                        </div>
+                        <i class="fa fa-chevron-right text-gray-400"></i>
+                    </div>
+                    <div class="setting-item">
+                        <div class="flex items-center">
+                            <i class="fa fa-info-circle text-info mr-3"></i>
+                            <span>关于系统</span>
+                        </div>
+                        <div>
+                            <span class="text-sm text-gray-500">v1.0.0</span>
+                            <i class="fa fa-chevron-right text-gray-400 ml-2"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="logout()" class="w-full bg-white text-danger font-semibold py-3 rounded-lg mt-6 border border-gray-200">
+                    <i class="fa fa-sign-out mr-2"></i>退出登录
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部导航 -->
+        <div class="footer">
+            <div class="flex justify-around">
+                <div class="nav-item active" onclick="switchPage('dashboard')">
+                    <i class="fa fa-home"></i>
+                    <span>首页</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('stock')">
+                    <i class="fa fa-cubes"></i>
+                    <span>库存</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('personnel')">
+                    <i class="fa fa-users"></i>
+                    <span>人员</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('settings')">
+                    <i class="fa fa-cog"></i>
+                    <span>设置</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框 -->
+    <!-- 消息模态框 -->
+    <div id="notificationModal" class="modal" onclick="closeModalOnBg(event, 'notificationModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">消息中心</h2>
+                <button onclick="closeNotificationModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="flex border-b border-gray-200">
+                <div class="tab-btn active" onclick="switchMessageTab('messages', this)">消息列表</div>
+                <div class="tab-btn" onclick="switchMessageTab('compose', this)">发送消息</div>
+            </div>
+            
+            <!-- 消息列表 -->
+            <div id="messagesContent" class="p-4 max-h-96 overflow-y-auto">
+                <div class="empty-state">
+                    <i class="fa fa-inbox text-4xl mb-2"></i>
+                    <p>暂无消息</p>
+                </div>
+            </div>
+            
+            <!-- 发送消息 -->
+            <div id="composeContent" class="p-4 hidden">
+                <form id="composeForm" onsubmit="sendMessage(event)">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">接收人 <span class="text-red-500">*</span></label>
+                        <select id="messageRecipient" name="recipient" class="form-input" required>
+                            <option value="">请选择接收人</option>
+                            <option value="all">所有人</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">消息内容 <span class="text-red-500">*</span></label>
+                        <textarea id="messageContent" name="content" class="form-input" rows="4" placeholder="请输入消息内容..." required></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeNotificationModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa fa-send mr-1"></i>发送
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息详情模态框 -->
+    <div id="messageDetailModal" class="message-detail-modal" onclick="closeMessageDetail(event)">
+        <div class="message-detail-content" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-bold text-gray-900">消息详情</h3>
+                <button onclick="closeMessageDetailModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="messageDetailBody">
+                <!-- 动态内容 -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeMessageDetailModal()" class="btn btn-secondary">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 扫码模态框 -->
+    <div id="scanModal" class="modal" onclick="closeModalOnBg(event, 'scanModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">模拟扫码</h2>
+                <button onclick="closeScanModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <div class="bg-gray-100 rounded-lg p-8 text-center mb-4">
+                    <i class="fa fa-qrcode text-6xl text-gray-400 mb-4"></i>
+                    <p class="text-gray-500">模拟扫码功能</p>
+                    <p class="text-xs text-gray-400 mt-2">点击下方的库存项进行模拟扫码</p>
+                </div>
+                <div id="scanStockList" class="max-h-64 overflow-y-auto space-y-2">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 入库模态框 -->
+    <div id="addStockModal" class="modal" onclick="closeModalOnBg(event, 'addStockModal')">
+        <div class="modal-content max-h-[90vh] overflow-y-auto">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">入库登记</h2>
+                <button onclick="closeAddStockModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="addStockForm" onsubmit="handleStockIn(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">标准物质名称 <span class="text-red-500">*</span></label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">标准物质编号 <span class="text-red-500">*</span></label>
+                            <input type="text" name="code" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">批次号</label>
+                            <input type="text" name="batchNumber" class="form-input">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">唯一性标识方式</label>
+                            <div class="flex space-x-4 mb-2">
+                                <label class="flex items-center">
+                                    <input type="radio" name="uniqueIdType" value="auto" checked class="mr-2" onchange="toggleUniqueIdInput()">
+                                    <span>自动生成</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="uniqueIdType" value="manual" class="mr-2" onchange="toggleUniqueIdInput()">
+                                    <span>手动输入</span>
+                                </label>
+                            </div>
+                            <input type="text" name="uniqueId" id="manualUniqueId" class="form-input hidden" placeholder="请输入唯一性标识">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">浓度</label>
+                                <input type="text" name="concentration" class="form-input" placeholder="如：100μg/mL">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">不确定度</label>
+                                <input type="text" name="uncertainty" class="form-input" placeholder="如：0.5%">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">生产厂家</label>
+                            <input type="text" name="manufacturer" class="form-input">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">稀释条件</label>
+                            <input type="text" name="storageCondition" class="form-input" placeholder="如：使用前用纯水稀释">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">数量 <span class="text-red-500">*</span></label>
+                                <input type="number" name="quantity" class="form-input" min="1" value="1" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">有效期 <span class="text-red-500">*</span></label>
+                                <input type="date" name="expiryDate" class="form-input" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">操作人员 <span class="text-red-500">*</span></label>
+                            <select name="operator" id="stockInOperator" class="form-input" required>
+                                <option value="">请选择</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">图片上传</label>
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary" onclick="document.getElementById('stockImages').click()">
+                                <input type="file" id="stockImages" multiple accept="image/*" class="hidden" onchange="previewImages(this, 'stockImagePreview')">
+                                <div id="stockImagePreview" class="image-preview-grid mb-2 hidden"></div>
+                                <div id="stockUploadPlaceholder">
+                                    <i class="fa fa-camera text-3xl text-gray-400 mb-2"></i>
+                                    <p class="text-gray-500 text-sm">点击上传图片（最多3张）</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeAddStockModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 出库模态框 -->
+    <div id="outStockModal" class="modal" onclick="closeModalOnBg(event, 'outStockModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">出库登记</h2>
+                <button onclick="closeOutStockModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="outStockForm" onsubmit="handleStockOut(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">选择标准物质 <span class="text-red-500">*</span></label>
+                            <select name="stockId" id="outStockSelect" class="form-input" required>
+                                <option value="">请选择</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">操作人员 <span class="text-red-500">*</span></label>
+                            <select name="operator" id="stockOutOperator" class="form-input" required>
+                                <option value="">请选择</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">出库用途</label>
+                            <input type="text" name="purpose" class="form-input" placeholder="请输入出库用途">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">图片上传</label>
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary" onclick="document.getElementById('outStockImages').click()">
+                                <input type="file" id="outStockImages" multiple accept="image/*" class="hidden" onchange="previewImages(this, 'outStockImagePreview')">
+                                <div id="outStockImagePreview" class="image-preview-grid mb-2 hidden"></div>
+                                <div id="outStockUploadPlaceholder">
+                                    <i class="fa fa-camera text-3xl text-gray-400 mb-2"></i>
+                                    <p class="text-gray-500 text-sm">点击上传图片（最多3张）</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeOutStockModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-warning">确认出库</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加人员模态框 -->
+    <div id="addPersonnelModal" class="modal" onclick="closeModalOnBg(event, 'addPersonnelModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">添加人员</h2>
+                <button onclick="closeAddPersonnelModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="addPersonnelForm" onsubmit="handleAddPersonnel(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">姓名 <span class="text-red-500">*</span></label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">用户名 <span class="text-red-500">*</span></label>
+                            <input type="text" name="username" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="password" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">角色 <span class="text-red-500">*</span></label>
+                            <select name="role" class="form-input" required>
+                                <option value="admin">管理员</option>
+                                <option value="user">普通用户</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeAddPersonnelModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div id="changePasswordModal" class="modal" onclick="closeModalOnBg(event, 'changePasswordModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">修改密码</h2>
+                <button onclick="closeChangePasswordModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">当前密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="currentPassword" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">新密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="newPassword" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">确认新密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="confirmPassword" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeChangePasswordModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看详情模态框 -->
+    <div id="viewDetailModal" class="modal" onclick="closeModalOnBg(event, 'viewDetailModal')">
+        <div class="modal-content max-h-[90vh] overflow-y-auto">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">标准物质详情</h2>
+                <button onclick="closeViewDetailModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="viewDetailContent" class="p-4">
+                <!-- 动态内容 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片查看模态框 -->
+    <div id="imageViewerModal" class="image-viewer-modal" onclick="closeImageViewer()">
+        <div class="image-viewer-content text-center">
+            <button onclick="closeImageViewer()" class="absolute top-4 right-4 text-white text-2xl">
+                <i class="fa fa-times"></i>
+            </button>
+            <img id="viewerImage" src="" alt="查看图片">
+            <p id="viewerCaption" class="text-white mt-4"></p>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // 全局变量
+        // ========================================
+        let stockStatusChart = null;
+        let currentStockTab = 'all';
+        const imageStorage = new Map();
+        let personnelData = [];
+        let stockData = [];
+        let recordsData = [];
+
+        // ========================================
+        // Supabase 数据操作
+        // ========================================
+
+        // 登录功能
+        async function login(username, password) {
+            try {
+                debugLog('尝试登录:', username);
+                
+                // 从人员表中验证用户
+                const { data: personnel, error } = await supabase
+                    .from('personnel')
+                    .select('*')
+                    .eq('username', username)
+                    .eq('password', password)
+                    .single();
+                
+                if (error || !personnel) {
+                    throw new Error('用户名或密码错误');
+                }
+                
+                // 使用Supabase Auth登录（创建匿名用户）
+                const { error: authError } = await supabase.auth.signInWithPassword({
+                    email: `${username}@example.com`,
+                    password: password
+                });
+                
+                // 如果邮箱登录失败，仍然允许使用（降级方案）
+                if (authError && !authError.message.includes('Email')) {
+                    throw authError;
+                }
+                
+                // 存储用户信息到localStorage（用于前端状态）
+                localStorage.setItem('currentUser', JSON.stringify(personnel));
+                currentUser = personnel;
+                
+                debugLog('登录成功:', personnel.name);
+                showApp();
+                
+            } catch (error) {
+                debugLog('登录失败:', error.message);
+                showLoginError('用户名或密码错误');
+            }
+        }
+
+        // 获取所有人员
+        async function loadPersonnel() {
+            try {
+                const { data, error } = await supabase
+                    .from('personnel')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                personnelData = data || [];
+                return personnelData;
+            } catch (error) {
+                debugLog('加载人员失败:', error);
+                return [];
+            }
+        }
+
+        // 获取所有库存
+        async function loadStock() {
+            try {
+                const { data, error } = await supabase
+                    .from('stock')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                stockData = data || [];
+                return stockData;
+            } catch (error) {
+                debugLog('加载库存失败:', error);
+                return [];
+            }
+        }
+
+        // 获取所有记录
+        async function loadRecords() {
+            try {
+                const { data, error } = await supabase
+                    .from('records')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                recordsData = data || [];
+                return recordsData;
+            } catch (error) {
+                debugLog('加载记录失败:', error);
+                return [];
+            }
+        }
+
+        // 添加库存
+        async function addStock(stockItem) {
+            try {
+                const { data, error } = await supabase
+                    .from('stock')
+                    .insert([stockItem])
+                    .select();
+                
+                if (error) throw error;
+                debugLog('库存添加成功:', data);
+                return data;
+            } catch (error) {
+                debugLog('添加库存失败:', error);
+                throw error;
+            }
+        }
+
+        // 删除库存
+        async function deleteStockItem(id) {
+            try {
+                const { error } = await supabase
+                    .from('stock')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                debugLog('库存删除成功:', id);
+            } catch (error) {
+                debugLog('删除库存失败:', error);
+                throw error;
+            }
+        }
+
+        // 添加记录
+        async function addRecordItem(recordItem) {
+            try {
+                const { data, error } = await supabase
+                    .from('records')
+                    .insert([recordItem])
+                    .select();
+                
+                if (error) throw error;
+                debugLog('记录添加成功:', data);
+                return data;
+            } catch (error) {
+                debugLog('添加记录失败:', error);
+                throw error;
+            }
+        }
+
+        // 添加人员
+        async function addPersonnel(personnelItem) {
+            try {
+                const { data, error } = await supabase
+                    .from('personnel')
+                    .insert([personnelItem])
+                    .select();
+                
+                if (error) throw error;
+                debugLog('人员添加成功:', data);
+                return data;
+            } catch (error) {
+                debugLog('添加人员失败:', error);
+                throw error;
+            }
+        }
+
+        // 删除人员
+        async function deletePersonnelItem(id) {
+            try {
+                const { error } = await supabase
+                    .from('personnel')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                debugLog('人员删除成功:', id);
+            } catch (error) {
+                debugLog('删除人员失败:', error);
+                throw error;
+            }
+        }
+
+        // 更新人员密码
+        async function updatePersonnelPassword(id, newPassword) {
+            try {
+                const { error } = await supabase
+                    .from('personnel')
+                    .update({ password: newPassword, updated_at: new Date().toISOString() })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                debugLog('密码更新成功:', id);
+            } catch (error) {
+                debugLog('更新密码失败:', error);
+                throw error;
+            }
+        }
+
+        // ========================================
+        // 页面控制
+        // ========================================
+
+        function showLoginPage() {
+            document.getElementById('loginPage').classList.add('active');
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+        }
+
+        function showApp() {
+            document.getElementById('loginPage').classList.remove('active');
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'block';
+            
+            // 更新用户信息
+            document.getElementById('currentUserName').textContent = currentUser?.name || '管理员';
+            document.getElementById('settingUserName').textContent = currentUser?.name || '管理员';
+            document.getElementById('settingUserRole').textContent = currentUser?.role === 'admin' ? '系统管理员' : '普通用户';
+            document.getElementById('settingUserInitial').textContent = (currentUser?.name || '管').charAt(0);
+            
+            // 初始化图表
+            initChart();
+            
+            // 刷新数据
+            refreshAllData();
+        }
+
+        function switchPage(page) {
+            // 隐藏所有页面
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+                p.style.display = 'none';
+            });
+            
+            // 显示目标页面
+            const targetPage = document.getElementById(page + 'Page');
+            if (targetPage) {
+                targetPage.classList.add('active');
+                targetPage.style.display = 'block';
+            }
+            
+            // 更新底部导航
+            document.querySelectorAll('.nav-item').forEach((item, index) => {
+                item.classList.remove('active');
+                const pages = ['dashboard', 'stock', 'personnel', 'settings'];
+                if (pages[index] === page) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 更新标题
+            const titles = {
+                dashboard: '标准物质管理',
+                stock: '库存管理',
+                personnel: '人员管理',
+                records: '操作记录',
+                settings: '系统设置'
+            };
+            document.querySelector('#pageTitle span').textContent = titles[page] || '标准物质管理';
+            
+            // 刷新数据
+            if (page === 'dashboard') refreshDashboard();
+            if (page === 'stock') renderStockList();
+            if (page === 'personnel') renderPersonnelList();
+            if (page === 'records') renderRecordsList();
+        }
+
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                supabase.auth.signOut();
+                currentUser = null;
+                localStorage.removeItem('currentUser');
+                showLoginPage();
+                document.getElementById('loginForm').reset();
+            }
+        }
+
+        // ========================================
+        // 登录表单处理
+        // ========================================
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            login(username, password);
+        });
+
+        function togglePassword() {
+            const input = document.getElementById('loginPassword');
+            const icon = document.getElementById('passwordToggleIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fa fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fa fa-eye';
+            }
+        }
+
+        function showLoginError(msg) {
+            const error = document.getElementById('loginError');
+            error.textContent = msg;
+            error.classList.remove('hidden');
+            setTimeout(() => error.classList.add('hidden'), 3000);
+        }
+
+        // ========================================
+        // 图表功能
+        // ========================================
+
+        function initChart() {
+            const ctx = document.getElementById('stockStatusChart').getContext('2d');
+            stockStatusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['正常', '即将过期', '已过期', '库存不足'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#22c55e', '#f59e0b', '#ef4444', '#3b82f6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 15, usePointStyle: true }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ========================================
+        // 数据刷新
+        // ========================================
+
+        async function refreshAllData() {
+            await Promise.all([
+                refreshDashboard(),
+                loadStock().then(() => renderStockList()),
+                loadPersonnel().then(() => renderPersonnelList()),
+                loadRecords().then(() => renderRecordsList()),
+                updateNotificationBadge()
+            ]);
+        }
+
+        async function refreshDashboard() {
+            await loadStock();
+            await loadRecords();
+            
+            // 计算统计数据
+            const totalStock = stockData.reduce((sum, item) => sum + (item.quantity || 0), 0);
+            document.getElementById('totalStock').textContent = totalStock;
+            
+            // 计算近效期预警
+            const today = new Date();
+            const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+            const expiryWarning = stockData.filter(item => {
+                const expiryDate = new Date(item.expiry_date || item.expiryDate);
+                return expiryDate <= thirtyDaysLater && expiryDate >= today;
+            }).length;
+            document.getElementById('expiryWarning').textContent = expiryWarning;
+            
+            // 计算状态分布
+            let normal = 0, warning = 0, expired = 0, low = 0;
+            stockData.forEach(item => {
+                const expiryDate = new Date(item.expiry_date || item.expiryDate);
+                if (item.quantity <= 0) {
+                    low++;
+                } else if (expiryDate < today) {
+                    expired++;
+                } else if (expiryDate <= thirtyDaysLater) {
+                    warning++;
+                } else {
+                    normal++;
+                }
+            });
+            
+            if (stockStatusChart) {
+                stockStatusChart.data.datasets[0].data = [normal, warning, expired, low];
+                stockStatusChart.update();
+            }
+            
+            // 加载最近活动
+            const recentActivities = document.getElementById('recentActivities');
+            if (recordsData.length === 0) {
+                recentActivities.innerHTML = '<div class="empty-state"><i class="fa fa-inbox text-4xl mb-2"></i><p>暂无活动记录</p></div>';
+            } else {
+                const sorted = recordsData.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date)).slice(0, 5);
+                recentActivities.innerHTML = sorted.map(record => {
+                    const icons = { in: 'fa-archive text-primary', out: 'fa-sign-out text-success', warning: 'fa-exclamation-triangle text-warning' };
+                    const actions = { in: '入库', out: '出库', warning: '预警' };
+                    return `
+                        <div class="activity-item">
+                            <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-3">
+                                <i class="fa ${icons[record.type] || 'fa-info-circle'}"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium">${record.material_name || record.materialName} ${actions[record.type]}</p>
+                                <p class="text-xs text-gray-500">${record.operator} · ${new Date(record.created_at || record.date).toLocaleString()}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // ========================================
+        // 库存管理
+        // ========================================
+
+        async function renderStockList() {
+            const search = document.getElementById('stockSearchInput')?.value?.toLowerCase() || '';
+            
+            let filtered = stockData;
+            if (search) {
+                filtered = filtered.filter(item => 
+                    (item.name || '').toLowerCase().includes(search) || 
+                    (item.code || '').toLowerCase().includes(search)
+                );
+            }
+            
+            // 按状态过滤
+            if (currentStockTab !== 'all') {
+                filtered = filtered.filter(item => item.status === currentStockTab);
+            }
+            
+            // 按名称分组
+            const grouped = {};
+            filtered.forEach(item => {
+                if (!grouped[item.name]) {
+                    grouped[item.name] = { items: [], total: 0 };
+                }
+                grouped[item.name].items.push(item);
+                grouped[item.name].total += item.quantity;
+            });
+            
+            const container = document.getElementById('stockList');
+            if (Object.keys(grouped).length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox text-4xl mb-2"></i><p>暂无库存数据</p></div>';
+                return;
+            }
+            
+            container.innerHTML = Object.entries(grouped).map(([name, group]) => {
+                const statusCounts = { normal: 0, warning: 0, expired: 0, low: 0 };
+                group.items.forEach(item => {
+                    statusCounts[item.status] = (statusCounts[item.status] || 0) + item.quantity;
+                });
+                
+                let statusLabels = '';
+                if (statusCounts.normal > 0) statusLabels += `<span class="ml-2 status-badge status-normal">正常:${statusCounts.normal}</span>`;
+                if (statusCounts.warning > 0) statusLabels += `<span class="ml-2 status-badge status-warning">即将:${statusCounts.warning}</span>`;
+                if (statusCounts.expired > 0) statusLabels += `<span class="ml-2 status-badge status-danger">过期:${statusCounts.expired}</span>`;
+                
+                const groupId = 'group-' + (name || 'unknown').replace(/\s+/g, '-');
+                
+                return `
+                    <div class="stock-group">
+                        <div class="stock-group-header flex justify-between items-center" onclick="toggleGroup('${groupId}')">
+                            <div class="flex items-center">
+                                <i class="fa fa-chevron-down mr-2 text-gray-400 transition-transform" id="arrow-${groupId}"></i>
+                                <h3 class="font-semibold">${name}${statusLabels}</h3>
+                            </div>
+                            <span class="text-lg font-bold">${group.total}</span>
+                        </div>
+                        <div id="${groupId}" class="hidden">
+                            ${group.items.map(item => `
+                                <div class="stock-item">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <p class="text-sm font-medium">唯一性标识: ${item.unique_id || item.uniqueId}</p>
+                                            <p class="text-xs text-gray-500">有效期: ${item.expiry_date || item.expiryDate} | 浓度: ${item.concentration || 'N/A'}</p>
+                                            <span class="status-badge status-${item.status} mt-1">
+                                                ${item.status === 'normal' ? '正常' : item.status === 'warning' ? '即将过期' : item.status === 'expired' ? '已过期' : '库存不足'}
+                                            </span>
+                                        </div>
+                                        <div class="flex space-x-1">
+                                            <button onclick="viewStockDetail(${item.id})" class="px-2 py-1 bg-info text-white text-xs rounded">查看</button>
+                                            <button onclick="quickOut(${item.id})" class="px-2 py-1 bg-warning text-white text-xs rounded">出库</button>
+                                            ${currentUser?.role === 'admin' ? `
+                                            <button onclick="deleteStock(${item.id})" class="px-2 py-1 bg-danger text-white text-xs rounded">删除</button>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function switchStockTab(tab, element) {
+            currentStockTab = tab;
+            document.querySelectorAll('.tab-nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            renderStockList();
+        }
+
+        function toggleGroup(id) {
+            const el = document.getElementById(id);
+            const arrow = document.getElementById('arrow-' + id);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                el.classList.add('hidden');
+                arrow.style.transform = 'rotate(0)';
+            }
+        }
+
+        // ========================================
+        // 入库功能
+        // ========================================
+
+        function showAddStockModal() {
+            document.getElementById('addStockModal').classList.add('show');
+            // 加载操作人员
+            const operators = document.getElementById('stockInOperator');
+            operators.innerHTML = '<option value="">请选择</option>';
+            personnelData.forEach(p => {
+                operators.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+            });
+            // 设置默认日期为30天后
+            const date = new Date();
+            date.setDate(date.getDate() + 30);
+            document.querySelector('input[name="expiryDate"]').value = date.toISOString().split('T')[0];
+        }
+
+        function closeAddStockModal() {
+            document.getElementById('addStockModal').classList.remove('show');
+            document.getElementById('addStockForm').reset();
+            document.getElementById('stockImagePreview').innerHTML = '';
+            document.getElementById('stockImagePreview').classList.add('hidden');
+            document.getElementById('stockUploadPlaceholder').classList.remove('hidden');
+        }
+
+        function toggleUniqueIdInput() {
+            const type = document.querySelector('input[name="uniqueIdType"]:checked').value;
+            const input = document.getElementById('manualUniqueId');
+            if (type === 'manual') {
+                input.classList.remove('hidden');
+                input.required = true;
+            } else {
+                input.classList.add('hidden');
+                input.required = false;
+            }
+        }
+
+        function previewImages(input, previewId) {
+            const preview = document.getElementById(previewId);
+            const placeholder = preview.nextElementSibling;
+            
+            if (input.files.length > 3) {
+                alert('最多只能上传3张图片');
+                input.value = '';
+                return;
+            }
+            
+            preview.innerHTML = '';
+            preview.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+            
+            Array.from(input.files).forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imageId = 'img_' + Date.now() + '_' + index;
+                    imageStorage.set(imageId, e.target.result);
+                    
+                    preview.innerHTML += `
+                        <div class="image-preview-item" data-image-id="${imageId}">
+                            <img src="${e.target.result}" alt="">
+                            <button type="button" onclick="removeImage(this, '${previewId}')" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function removeImage(btn, previewId) {
+            const item = btn.closest('.image-preview-item');
+            const imageId = item.dataset.imageId;
+            imageStorage.delete(imageId);
+            item.remove();
+            
+            const preview = document.getElementById(previewId);
+            const placeholder = preview.nextElementSibling;
+            if (preview.children.length === 0) {
+                preview.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+            }
+        }
+
+        async function handleStockIn(e) {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            
+            const quantity = parseInt(formData.get('quantity')) || 1;
+            const baseTime = Date.now();
+            
+            // 收集图片数据
+            const images = [];
+            const previewItems = document.querySelectorAll('#stockImagePreview .image-preview-item');
+            previewItems.forEach(item => {
+                const imageId = item.dataset.imageId;
+                const imageData = imageStorage.get(imageId);
+                if (imageData) {
+                    images.push({
+                        id: imageId,
+                        data: imageData,
+                        name: '入库图片_' + images.length
+                    });
+                }
+            });
+            
+            // 为每瓶创建记录
+            const addedItems = [];
+            for (let i = 0; i < quantity; i++) {
+                const uniqueId = formData.get('uniqueIdType') === 'manual' 
+                    ? `${formData.get('uniqueId')}-${i + 1}`
+                    : `${formData.get('batchNumber') || 'BATCH'}-${baseTime.toString().slice(-4)}-${String(i + 1).padStart(2, '0')}`;
+                
+                // 计算状态
+                const today = new Date();
+                const expiry = new Date(formData.get('expiryDate'));
+                const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+                
+                let status = 'normal';
+                if (diffDays < 0) status = 'expired';
+                else if (diffDays <= 30) status = 'warning';
+                
+                const newItem = {
+                    name: formData.get('name'),
+                    code: formData.get('code'),
+                    batch_number: formData.get('batchNumber'),
+                    unique_id: uniqueId,
+                    manufacturer: formData.get('manufacturer'),
+                    concentration: formData.get('concentration'),
+                    uncertainty: formData.get('uncertainty'),
+                    storage_condition: formData.get('storageCondition'),
+                    quantity: 1,
+                    expiry_date: formData.get('expiryDate'),
+                    operator: formData.get('operator'),
+                    status: status,
+                    images: i === 0 ? images : [],
+                    created_at: new Date().toISOString()
+                };
+                
+                try {
+                    await addStock(newItem);
+                    addedItems.push(newItem);
+                } catch (error) {
+                    alert('入库失败: ' + error.message);
+                    return;
+                }
+            }
+            
+            // 添加记录
+            await addRecordItem({
+                type: 'in',
+                material_name: formData.get('name'),
+                quantity: quantity,
+                operator: formData.get('operator'),
+                note: `批次号: ${formData.get('batchNumber') || 'N/A'}，入库${quantity}瓶`,
+                images: images,
+                created_at: new Date().toISOString()
+            });
+            
+            closeAddStockModal();
+            await refreshAllData();
+            alert(`入库成功！已添加${quantity}瓶标准物质`);
+        }
+
+        // ========================================
+        // 出库功能
+        // ========================================
+
+        function showOutStockModal() {
+            document.getElementById('outStockModal').classList.add('show');
+            loadOutStockOptions();
+            loadOutOperators();
+        }
+
+        function closeOutStockModal() {
+            document.getElementById('outStockModal').classList.remove('show');
+            document.getElementById('outStockForm').reset();
+            document.getElementById('outStockImagePreview').innerHTML = '';
+            document.getElementById('outStockImagePreview').classList.add('hidden');
+            document.getElementById('outStockUploadPlaceholder').classList.remove('hidden');
+        }
+
+        function loadOutStockOptions() {
+            const select = document.getElementById('outStockSelect');
+            select.innerHTML = '<option value="">请选择</option>';
+            stockData.forEach(item => {
+                select.innerHTML += `<option value="${item.id}">${item.name}（${item.unique_id || item.uniqueId}）</option>`;
+            });
+        }
+
+        function loadOutOperators() {
+            const select = document.getElementById('stockOutOperator');
+            select.innerHTML = '<option value="">请选择</option>';
+            personnelData.forEach(p => {
+                select.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+            });
+        }
+
+        function quickOut(id) {
+            showOutStockModal();
+            document.getElementById('outStockSelect').value = id;
+        }
+
+        async function handleStockOut(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const stockId = parseInt(formData.get('stockId'));
+            
+            const item = stockData.find(s => s.id === stockId);
+            if (!item) {
+                alert('未找到该标准物质');
+                return;
+            }
+            
+            // 收集出库图片
+            const images = [];
+            const previewItems = document.querySelectorAll('#outStockImagePreview .image-preview-item');
+            previewItems.forEach(item => {
+                const imageId = item.dataset.imageId;
+                const imageData = imageStorage.get(imageId);
+                if (imageData) {
+                    images.push({
+                        id: imageId,
+                        data: imageData,
+                        name: '出库图片_' + images.length
+                    });
+                }
+            });
+            
+            if (confirm(`确定要将 ${item.name}（${item.unique_id || item.uniqueId}）出库吗？`)) {
+                try {
+                    // 从Supabase删除库存
+                    await deleteStockItem(stockId);
+                    
+                    // 添加记录
+                    await addRecordItem({
+                        type: 'out',
+                        material_name: item.name,
+                        quantity: 1,
+                        operator: formData.get('operator'),
+                        note: `唯一性标识: ${item.unique_id || item.uniqueId}，用途: ${formData.get('purpose') || '未填写'}`,
+                        images: images,
+                        created_at: new Date().toISOString()
+                    });
+                    
+                    closeOutStockModal();
+                    await refreshAllData();
+                    alert('出库成功！');
+                } catch (error) {
+                    alert('出库失败: ' + error.message);
+                }
+            }
+        }
+
+        async function deleteStock(id) {
+            if (!confirm('确定要删除这个标准物质吗？')) return;
+            try {
+                await deleteStockItem(id);
+                await refreshAllData();
+                alert('删除成功！');
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        function viewStockDetail(id) {
+            const item = stockData.find(s => s.id === id);
+            if (!item) return;
+            
+            const statusText = {
+                normal: '正常',
+                warning: '即将过期',
+                expired: '已过期',
+                low: '库存不足'
+            }[item.status];
+            
+            // 生成二维码数据
+            const qrData = JSON.stringify({
+                名称: item.name,
+                编号: item.code,
+                批次: item.batch_number || item.batchNumber,
+                唯一标识: item.unique_id || item.uniqueId,
+                有效期: item.expiry_date || item.expiryDate,
+                状态: statusText
+            });
+            
+            // 显示图片
+            let imagesHtml = '';
+            const images = item.images || [];
+            if (images.length > 0) {
+                imagesHtml = `
+                    <div class="mb-4">
+                        <h3 class="text-lg font-semibold mb-2">相关图片</h3>
+                        <div class="record-images">
+                            ${images.map((img, idx) => `
+                                <div class="record-image-item" onclick="viewImage('${img.data}', '入库图片 ${idx + 1}')">
+                                    <img src="${img.data}" alt="入库图片">
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('viewDetailContent').innerHTML = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div><span class="text-gray-500">标准物质名称:</span> ${item.name}</div>
+                        <div><span class="text-gray-500">标准物质编号:</span> ${item.code}</div>
+                        <div><span class="text-gray-500">批次号:</span> ${item.batch_number || 'N/A'}</div>
+                        <div><span class="text-gray-500">唯一性标识:</span> ${item.unique_id || item.uniqueId}</div>
+                        <div><span class="text-gray-500">生产厂家:</span> ${item.manufacturer || 'N/A'}</div>
+                        <div><span class="text-gray-500">浓度:</span> ${item.concentration || 'N/A'}</div>
+                        <div><span class="text-gray-500">不确定度:</span> ${item.uncertainty || 'N/A'}</div>
+                        <div><span class="text-gray-500">稀释条件:</span> ${item.storage_condition || 'N/A'}</div>
+                        <div><span class="text-gray-500">数量:</span> ${item.quantity}</div>
+                        <div><span class="text-gray-500">有效期:</span> ${item.expiry_date || item.expiryDate}</div>
+                        <div><span class="text-gray-500">状态:</span> <span class="status-badge status-${item.status}">${statusText}</span></div>
+                        <div><span class="text-gray-500">创建时间:</span> ${new Date(item.created_at).toLocaleString('zh-CN')}</div>
+                    </div>
+                    
+                    ${imagesHtml}
+                    
+                    <div class="text-center">
+                        <canvas id="detailQRCode"></canvas>
+                        <p class="text-xs text-gray-500 mt-2">扫描二维码查看详情</p>
+                    </div>
+                    
+                    <div class="flex space-x-3">
+                        <button onclick="quickOut(${item.id}); closeViewDetailModal();" class="flex-1 btn btn-warning">出库</button>
+                        <button onclick="closeViewDetailModal()" class="flex-1 btn btn-secondary">关闭</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('viewDetailModal').classList.add('show');
+            
+            // 生成二维码
+            setTimeout(() => {
+                QRCode.toCanvas(document.getElementById('detailQRCode'), qrData, {
+                    width: 200,
+                    margin: 1
+                });
+            }, 100);
+        }
+
+        function closeViewDetailModal() {
+            document.getElementById('viewDetailModal').classList.remove('show');
+        }
+
+        // ========================================
+        // 图片查看功能
+        // ========================================
+
+        function viewImage(imageData, caption) {
+            document.getElementById('viewerImage').src = imageData;
+            document.getElementById('viewerCaption').textContent = caption;
+            document.getElementById('imageViewerModal').classList.add('show');
+        }
+
+        function closeImageViewer() {
+            document.getElementById('imageViewerModal').classList.remove('show');
+        }
+
+        // ========================================
+        // 记录管理
+        // ========================================
+
+        async function renderRecordsList() {
+            const search = document.getElementById('recordsSearchInput')?.value?.toLowerCase() || '';
+            
+            let filtered = recordsData;
+            if (search) {
+                filtered = filtered.filter(r => 
+                    (r.material_name || '').toLowerCase().includes(search) || 
+                    (r.operator || '').toLowerCase().includes(search)
+                );
+            }
+            
+            // 按时间倒序
+            filtered.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date));
+            
+            const container = document.getElementById('recordsList');
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-history text-4xl mb-2"></i><p>暂无操作记录</p></div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(record => {
+                const icons = { in: 'fa-archive text-blue-500', out: 'fa-sign-out text-green-500', warning: 'fa-exclamation-triangle text-yellow-500' };
+                const types = { in: '入库', out: '出库', warning: '预警' };
+                const badges = { in: 'bg-blue-100 text-blue-800', out: 'bg-green-100 text-green-800', warning: 'bg-yellow-100 text-yellow-800' };
+                
+                // 渲染图片
+                let imagesHtml = '';
+                const images = record.images || [];
+                if (images.length > 0) {
+                    imagesHtml = `
+                        <div class="record-images mt-3">
+                            ${images.map((img, idx) => `
+                                <div class="record-image-item" onclick="viewImage('${img.data}', '${types[record.type]}图片 ${idx + 1}')">
+                                    <img src="${img.data}" alt="记录图片">
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div class="record-item">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-3">
+                                    <i class="fa ${icons[record.type]}"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold">${record.material_name || record.materialName}</h3>
+                                    <p class="text-sm text-gray-500">${record.operator} · ${new Date(record.created_at || record.date).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <span class="status-badge ${badges[record.type] || 'bg-gray-100 text-gray-600'}">${types[record.type]}</span>
+                        </div>
+                        <div class="mt-2">
+                            <p class="text-sm">数量: ${record.quantity}</p>
+                            <p class="text-sm text-gray-500">备注: ${record.note || ''}</p>
+                            ${imagesHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ========================================
+        // 人员管理
+        // ========================================
+
+        async function renderPersonnelList() {
+            const search = document.getElementById('personnelSearchInput')?.value?.toLowerCase() || '';
+            
+            let filtered = personnelData;
+            if (search) {
+                filtered = filtered.filter(p => 
+                    (p.name || '').toLowerCase().includes(search) || 
+                    (p.username || '').toLowerCase().includes(search)
+                );
+            }
+            
+            const container = document.getElementById('personnelList');
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-users text-4xl mb-2"></i><p>暂无人员数据</p></div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(person => `
+                <div class="personnel-item">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold">${person.name}</h3>
+                            <p class="text-sm text-gray-500">用户名: ${person.username}</p>
+                        </div>
+                        <span class="status-badge ${person.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                            ${person.role === 'admin' ? '管理员' : '普通用户'}
+                        </span>
+                    </div>
+                    <div class="flex justify-end space-x-2 mt-3">
+                        ${person.id !== currentUser?.id && currentUser?.role === 'admin' ? `
+                            <button onclick="deletePersonnel(${person.id})" class="text-danger text-sm">
+                                <i class="fa fa-trash"></i> 删除
+                            </button>
+                        ` : '<span class="text-xs text-gray-400">当前用户</span>'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showAddPersonnelModal() {
+            document.getElementById('addPersonnelModal').classList.add('show');
+        }
+
+        function closeAddPersonnelModal() {
+            document.getElementById('addPersonnelModal').classList.remove('show');
+            document.getElementById('addPersonnelForm').reset();
+        }
+
+        async function handleAddPersonnel(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            // 检查用户名是否已存在
+            if (personnelData.some(p => p.username === formData.get('username'))) {
+                alert('用户名已存在！');
+                return;
+            }
+            
+            try {
+                await addPersonnel({
+                    name: formData.get('name'),
+                    username: formData.get('username'),
+                    password: formData.get('password'),
+                    role: formData.get('role'),
+                    created_at: new Date().toISOString()
+                });
+                
+                closeAddPersonnelModal();
+                await loadPersonnel();
+                renderPersonnelList();
+                alert('人员添加成功！');
+            } catch (error) {
+                alert('添加失败: ' + error.message);
+            }
+        }
+
+        async function deletePersonnel(id) {
+            if (!confirm('确定要删除这个人员吗？')) return;
+            if (id === currentUser?.id) {
+                alert('不能删除当前登录的用户！');
+                return;
+            }
+            try {
+                await deletePersonnelItem(id);
+                await loadPersonnel();
+                renderPersonnelList();
+                alert('删除成功！');
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // ========================================
+        // 消息功能
+        // ========================================
+
+        function openNotificationModal() {
+            document.getElementById('notificationModal').classList.add('show');
+            switchMessageTab('messages', document.querySelector('#notificationModal .tab-btn'));
+            renderMessages();
+            loadMessageRecipients();
+        }
+
+        function closeNotificationModal() {
+            document.getElementById('notificationModal').classList.remove('show');
+        }
+
+        function switchMessageTab(tab, element) {
+            document.querySelectorAll('#notificationModal .tab-btn').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            
+            if (tab === 'messages') {
+                document.getElementById('messagesContent').classList.remove('hidden');
+                document.getElementById('composeContent').classList.add('hidden');
+            } else {
+                document.getElementById('messagesContent').classList.add('hidden');
+                document.getElementById('composeContent').classList.remove('hidden');
+            }
+        }
+
+        function renderMessages() {
+            document.getElementById('messagesContent').innerHTML = `
+                <div class="empty-state">
+                    <i class="fa fa-comments text-4xl mb-2"></i>
+                    <p>消息功能开发中...</p>
+                </div>
+            `;
+        }
+
+        function loadMessageRecipients() {
+            const select = document.getElementById('messageRecipient');
+            select.innerHTML = '<option value="">请选择接收人</option>';
+            select.innerHTML += '<option value="all">所有人</option>';
+            personnelData.forEach(p => {
+                if (p.id !== currentUser?.id) {
+                    select.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+                }
+            });
+        }
+
+        function sendMessage(e) {
+            e.preventDefault();
+            alert('消息功能开发中...');
+            closeNotificationModal();
+        }
+
+        function closeMessageDetail(event) {
+            if (event.target === event.currentTarget) {
+                document.getElementById('messageDetailModal').classList.remove('show');
+            }
+        }
+
+        function closeMessageDetailModal() {
+            document.getElementById('messageDetailModal').classList.remove('show');
+        }
+
+        function updateNotificationBadge() {
+            document.getElementById('notificationCount').classList.add('hidden');
+        }
+
+        // ========================================
+        // 扫码功能
+        // ========================================
+
+        function showScanModal() {
+            document.getElementById('scanModal').classList.add('show');
+            loadScanStockList();
+        }
+
+        function closeScanModal() {
+            document.getElementById('scanModal').classList.remove('show');
+        }
+
+        function loadScanStockList() {
+            const container = document.getElementById('scanStockList');
+            if (stockData.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-4">暂无库存数据</div>';
+                return;
+            }
+            
+            container.innerHTML = stockData.map(item => `
+                <div class="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50" onclick="viewStockDetail(${item.id}); closeScanModal();">
+                    <div class="font-medium">${item.name}</div>
+                    <div class="text-sm text-gray-500">${item.unique_id || item.uniqueId}</div>
+                </div>
+            `).join('');
+        }
+
+        // ========================================
+        // 修改密码
+        // ========================================
+
+        function showChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.add('show');
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.remove('show');
+            document.getElementById('changePasswordForm').reset();
+        }
+
+        async function handleChangePassword(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            if (formData.get('newPassword') !== formData.get('confirmPassword')) {
+                alert('新密码和确认密码不一致！');
+                return;
+            }
+            
+            if (formData.get('newPassword').length < 6) {
+                alert('密码长度至少6位！');
+                return;
+            }
+            
+            try {
+                await updatePersonnelPassword(currentUser.id, formData.get('newPassword'));
+                alert('密码修改成功！');
+                closeChangePasswordModal();
+            } catch (error) {
+                alert('密码修改失败: ' + error.message);
+            }
+        }
+
+        // ========================================
+        // 数据导出
+        // ========================================
+
+        async function exportData() {
+            await loadStock();
+            await loadRecords();
+            
+            if (stockData.length === 0 && recordsData.length === 0) {
+                alert('没有可导出的数据');
+                return;
+            }
+            
+            const wb = XLSX.utils.book_new();
+            
+            // 导出库存数据
+            if (stockData.length > 0) {
+                const stockSheet = XLSX.utils.json_to_sheet(stockData.map(item => ({
+                    '名称': item.name,
+                    '编号': item.code,
+                    '批次号': item.batch_number || '',
+                    '唯一标识': item.unique_id || '',
+                    '生产厂家': item.manufacturer || '',
+                    '浓度': item.concentration || '',
+                    '不确定度': item.uncertainty || '',
+                    '数量': item.quantity,
+                    '有效期': item.expiry_date || item.expiryDate,
+                    '状态': item.status,
+                    '操作人': item.operator || '',
+                    '创建时间': item.created_at || ''
+                })));
+                XLSX.utils.book_append_sheet(wb, stockSheet, '库存');
+            }
+            
+            // 导出记录数据
+            if (recordsData.length > 0) {
+                const recordsSheet = XLSX.utils.json_to_sheet(recordsData.map(item => ({
+                    '类型': item.type === 'in' ? '入库' : '出库',
+                    '物料名称': item.material_name || item.materialName,
+                    '数量': item.quantity,
+                    '操作人': item.operator,
+                    '备注': item.note || '',
+                    '时间': item.created_at || item.date
+                })));
+                XLSX.utils.book_append_sheet(wb, recordsSheet, '记录');
+            }
+            
+            const fileName = `标准物质数据_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            alert(`数据已导出到 ${fileName}`);
+        }
+
+        // ========================================
+        // 模态框辅助函数
+        // ========================================
+
+        function closeModalOnBg(event, modalId) {
+            if (event.target === event.currentTarget) {
+                document.getElementById(modalId).classList.remove('show');
+            }
+        }
+
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        // ========================================
+        // 演示数据加载（仅用于开发测试）
+        // ========================================
+
+        async function loadDemoData() {
+            debugLog('加载演示数据...');
+            
+            try {
+                // 添加演示人员
+                await addPersonnel({
+                    name: '李四',
+                    username: 'user2',
+                    password: 'user123',
+                    role: 'user',
+                    created_at: new Date().toISOString()
+                });
+                
+                // 添加演示库存
+                await addStock({
+                    name: '甲醇中苯标准物质',
+                    code: 'GBW(E)080241',
+                    batch_number: '202401001',
+                    unique_id: 'BATCH-2024-01',
+                    manufacturer: '中国计量科学研究院',
+                    concentration: '1000μg/mL',
+                    uncertainty: '1%',
+                    storage_condition: '室温保存',
+                    quantity: 5,
+                    expiry_date: '2025-12-31',
+                    operator: '系统管理员',
+                    status: 'normal',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                await addStock({
+                    name: '乙醇中甲醛标准物质',
+                    code: 'GBW(E)080123',
+                    batch_number: '202401002',
+                    unique_id: 'BATCH-2024-02',
+                    manufacturer: '国家标准物质中心',
+                    concentration: '100μg/mL',
+                    uncertainty: '2%',
+                    storage_condition: '冷藏保存',
+                    quantity: 3,
+                    expiry_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    operator: '张三',
+                    status: 'warning',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                await addStock({
+                    name: '丙酮中丙酮酸标准物质',
+                    code: 'GBW(E)080456',
+                    batch_number: '202401003',
+                    unique_id: 'BATCH-2024-03',
+                    manufacturer: '进口标准品',
+                    concentration: '500μg/mL',
+                    uncertainty: '0.5%',
+                    storage_condition: '-20℃冷冻',
+                    quantity: 2,
+                    expiry_date: '2024-01-15',
+                    operator: '系统管理员',
+                    status: 'expired',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                // 添加演示记录
+                await addRecordItem({
+                    type: 'in',
+                    material_name: '甲醇中苯标准物质',
+                    quantity: 5,
+                    operator: '系统管理员',
+                    note: '演示数据入库',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                debugLog('演示数据加载成功！');
+                await refreshAllData();
+                alert('演示数据加载成功！');
+                
+            } catch (error) {
+                debugLog('加载演示数据失败:', error.message);
+                alert('加载演示数据失败: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
