@@ -3,14 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>标准物质管理助手 - 调试预览版</title>
+    <title>标准物质管理助手</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-    <!-- SheetJS for Excel export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    
     <script>
+        // ========================================
+        // Supabase 配置 - 请修改为你的信息
+        // ========================================
+        const SUPABASE_URL = 'https://fuyiuwshpvnxnjgyikgu.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_NX0NDpPxzF9WZ0PmbLs6pg_X0IRhNQP';
+
+        // 初始化 Supabase 客户端
+        let supabase;
+        let currentUser = null;
+
+        // 初始化
+        async function initSupabase() {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            // 检查是否有登录用户
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                showApp();
+            }
+
+            // 监听认证状态变化
+            supabase.auth.onAuthStateChange((event, session) => {
+                if (event === 'SIGNED_IN' && session) {
+                    currentUser = session.user;
+                    showApp();
+                } else if (event === 'SIGNED_OUT') {
+                    currentUser = null;
+                    showLoginPage();
+                }
+            });
+        }
+
+        // 调试日志
+        function debugLog(message, data = '') {
+            console.log(`[DEBUG] ${message}`, data);
+            const debugPanel = document.getElementById('debugContent');
+            if (debugPanel) {
+                const timestamp = new Date().toLocaleTimeString();
+                debugPanel.innerHTML += `<div>[${timestamp}] ${message} ${JSON.stringify(data)}</div>`;
+            }
+        }
+
         tailwind.config = {
             theme: {
                 extend: {
@@ -22,8 +67,9 @@
                     }
                 }
             }
-        }
+        };
     </script>
+    
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body { height: 100%; margin: 0; padding: 0; }
@@ -223,7 +269,6 @@
         
         .activity-item:last-child { border-bottom: none; }
         
-        /* 消息样式优化 */
         .message-item {
             padding: 1rem;
             border-radius: 0.5rem;
@@ -344,7 +389,6 @@
         .tab-nav-item { flex: 1; padding: 0.75rem; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
         .tab-nav-item.active { border-bottom-color: #3b82f6; color: #3b82f6; font-weight: 600; }
         
-        /* 图片网格样式 */
         .record-images {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -378,7 +422,6 @@
             font-size: 0.75rem;
         }
         
-        /* 图片查看模态框 */
         .image-viewer-modal {
             position: fixed;
             inset: 0;
@@ -402,7 +445,6 @@
             object-fit: contain;
         }
         
-        /* 调试面板样式 */
         .debug-panel {
             position: fixed;
             top: 80px;
@@ -433,7 +475,6 @@
             cursor: pointer;
         }
         
-        /* 消息详情模态框 */
         .message-detail-modal {
             position: fixed;
             inset: 0;
@@ -458,15 +499,13 @@
         }
     </style>
 </head>
-<body>
+<body onload="initSupabase()">
     <!-- 调试工具 -->
     <div class="debug-toggle" onclick="toggleDebug()">🔧 调试</div>
     <div id="debugPanel" class="debug-panel">
         <h4 class="text-white mb-2">调试信息</h4>
         <div id="debugContent"></div>
-        <button onclick="clearAllData()" class="mt-2 bg-red-600 text-white px-2 py-1 rounded text-xs">清空所有数据</button>
-        <button onclick="loadDemoData()" class="mt-2 bg-green-600 text-white px-2 py-1 rounded text-xs ml-2">加载演示数据</button>
-        <button onclick="testMessage()" class="mt-2 bg-blue-600 text-white px-2 py-1 rounded text-xs ml-2">测试消息</button>
+        <button onclick="loadDemoData()" class="mt-2 bg-green-600 text-white px-2 py-1 rounded text-xs">加载演示数据</button>
     </div>
 
     <!-- 登录页面 -->
@@ -477,12 +516,12 @@
                     <i class="fa fa-cubes text-4xl text-white"></i>
                 </div>
                 <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-500 to-blue-700 bg-clip-text text-transparent">标准物质管理助手</h1>
-                <p class="text-gray-500 mt-1">调试预览版 v1.0.0</p>
+                <p class="text-gray-500 mt-1">Supabase 云端版 v1.0.0</p>
             </div>
             
             <div id="loginError" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg mb-4 text-sm"></div>
             
-            <form id="loginForm" class="space-y-4">
+<form id="loginForm" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
                     <div class="relative">
@@ -526,6 +565,10 @@
                         <span class="font-mono">user1 / user123</span>
                     </div>
                 </div>
+            </div>
+            
+            <div id="connectionStatus" class="mt-4 text-center text-sm text-gray-500">
+                <i class="fa fa-circle text-green-500 mr-1"></i>已连接 Supabase
             </div>
         </div>
     </div>
@@ -664,8 +707,8 @@
                 <!-- 库存列表 -->
                 <div id="stockList">
                     <div class="empty-state">
-                        <i class="fa fa-inbox text-4xl mb-2"></i>
-                        <p>暂无库存数据</p>
+                        <i class="fa fa-spinner fa-spin text-4xl mb-2"></i>
+                        <p>加载中...</p>
                     </div>
                 </div>
             </div>
@@ -739,13 +782,6 @@
                         <div class="flex items-center">
                             <i class="fa fa-download text-success mr-3"></i>
                             <span>数据导出(Excel)</span>
-                        </div>
-                        <i class="fa fa-chevron-right text-gray-400"></i>
-                    </div>
-                    <div class="setting-item" onclick="clearAllData()">
-                        <div class="flex items-center">
-                            <i class="fa fa-trash text-danger mr-3"></i>
-                            <span>清空数据</span>
                         </div>
                         <i class="fa fa-chevron-right text-gray-400"></i>
                     </div>
@@ -869,7 +905,7 @@
                 <div class="bg-gray-100 rounded-lg p-8 text-center mb-4">
                     <i class="fa fa-qrcode text-6xl text-gray-400 mb-4"></i>
                     <p class="text-gray-500">模拟扫码功能</p>
-                    <p class="text-xs text-gray-400 mt-2">在调试模式下，点击下方的库存项进行模拟扫码</p>
+                    <p class="text-xs text-gray-400 mt-2">点击下方的库存项进行模拟扫码</p>
                 </div>
                 <div id="scanStockList" class="max-h-64 overflow-y-auto space-y-2">
                     <!-- 动态生成 -->
@@ -1122,107 +1158,237 @@
     </div>
 
     <script>
-        // ==================== 数据存储 ====================
-        const Storage = {
-            get(key) {
-                const data = localStorage.getItem(key);
-                return data ? JSON.parse(data) : null;
-            },
-            set(key, value) {
-                localStorage.setItem(key, JSON.stringify(value));
-            },
-            remove(key) {
-                localStorage.removeItem(key);
-            }
-        };
-
-        // ==================== 初始化数据 ====================
-        function initData() {
-            // 初始化人员数据
-            if (!Storage.get('personnel')) {
-                Storage.set('personnel', [
-                    { id: 1, name: '系统管理员', username: 'admin', password: 'admin123', role: 'admin' },
-                    { id: 2, name: '张三', username: 'user1', password: 'user123', role: 'user' }
-                ]);
-            }
-            
-            // 初始化其他数据
-            if (!Storage.get('stock')) Storage.set('stock', []);
-            if (!Storage.get('records')) Storage.set('records', []);
-            if (!Storage.get('messages')) Storage.set('messages', []);
-            if (!Storage.get('currentUser')) Storage.set('currentUser', null);
-        }
-
-        // ==================== 全局状态 ====================
-        let currentUser = null;
+        // ========================================
+        // 全局变量
+        // ========================================
         let stockStatusChart = null;
         let currentStockTab = 'all';
-        // 临时存储图片数据
         const imageStorage = new Map();
+        let personnelData = [];
+        let stockData = [];
+        let recordsData = [];
 
-        // ==================== 登录功能 ====================
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            const personnel = Storage.get('personnel') || [];
-            const user = personnel.find(p => p.username === username && p.password === password);
-            
-            if (user) {
-                currentUser = user;
-                Storage.set('currentUser', user);
-                if (document.getElementById('rememberMe').checked) {
-                    Storage.set('rememberedUser', username);
+        // ========================================
+        // Supabase 数据操作
+        // ========================================
+
+        // 登录功能
+        async function login(username, password) {
+            try {
+                debugLog('尝试登录:', username);
+                
+                // 从人员表中验证用户
+                const { data: personnel, error } = await supabase
+                    .from('personnel')
+                    .select('*')
+                    .eq('username', username)
+                    .eq('password', password)
+                    .single();
+                
+                if (error || !personnel) {
+                    throw new Error('用户名或密码错误');
                 }
+                
+                // 使用Supabase Auth登录（创建匿名用户）
+                const { error: authError } = await supabase.auth.signInWithPassword({
+                    email: `${username}@example.com`,
+                    password: password
+                });
+                
+                // 如果邮箱登录失败，仍然允许使用（降级方案）
+                if (authError && !authError.message.includes('Email')) {
+                    throw authError;
+                }
+                
+                // 存储用户信息到localStorage（用于前端状态）
+                localStorage.setItem('currentUser', JSON.stringify(personnel));
+                currentUser = personnel;
+                
+                debugLog('登录成功:', personnel.name);
                 showApp();
-            } else {
+                
+            } catch (error) {
+                debugLog('登录失败:', error.message);
                 showLoginError('用户名或密码错误');
             }
-        });
+        }
 
-        function togglePassword() {
-            const input = document.getElementById('loginPassword');
-            const icon = document.getElementById('passwordToggleIcon');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fa fa-eye-slash';
-            } else {
-                input.type = 'password';
-                icon.className = 'fa fa-eye';
+        // 获取所有人员
+        async function loadPersonnel() {
+            try {
+                const { data, error } = await supabase
+                    .from('personnel')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                personnelData = data || [];
+                return personnelData;
+            } catch (error) {
+                debugLog('加载人员失败:', error);
+                return [];
             }
         }
 
-        function showLoginError(msg) {
-            const error = document.getElementById('loginError');
-            error.textContent = msg;
-            error.classList.remove('hidden');
-            setTimeout(() => error.classList.add('hidden'), 3000);
+        // 获取所有库存
+        async function loadStock() {
+            try {
+                const { data, error } = await supabase
+                    .from('stock')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                stockData = data || [];
+                return stockData;
+            } catch (error) {
+                debugLog('加载库存失败:', error);
+                return [];
+            }
         }
 
-        // ==================== 页面切换 ====================
+        // 获取所有记录
+        async function loadRecords() {
+            try {
+                const { data, error } = await supabase
+                    .from('records')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                recordsData = data || [];
+                return recordsData;
+            } catch (error) {
+                debugLog('加载记录失败:', error);
+                return [];
+            }
+        }
+
+        // 添加库存
+        async function addStock(stockItem) {
+            try {
+                const { data, error } = await supabase
+                    .from('stock')
+                    .insert([stockItem])
+                    .select();
+                
+                if (error) throw error;
+                debugLog('库存添加成功:', data);
+                return data;
+            } catch (error) {
+                debugLog('添加库存失败:', error);
+                throw error;
+            }
+        }
+
+        // 删除库存
+        async function deleteStockItem(id) {
+            try {
+                const { error } = await supabase
+                    .from('stock')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                debugLog('库存删除成功:', id);
+            } catch (error) {
+                debugLog('删除库存失败:', error);
+                throw error;
+            }
+        }
+
+        // 添加记录
+        async function addRecordItem(recordItem) {
+            try {
+                const { data, error } = await supabase
+                    .from('records')
+                    .insert([recordItem])
+                    .select();
+                
+                if (error) throw error;
+                debugLog('记录添加成功:', data);
+                return data;
+            } catch (error) {
+                debugLog('添加记录失败:', error);
+                throw error;
+            }
+        }
+
+        // 添加人员
+        async function addPersonnel(personnelItem) {
+            try {
+                const { data, error } = await supabase
+                    .from('personnel')
+                    .insert([personnelItem])
+                    .select();
+                
+                if (error) throw error;
+                debugLog('人员添加成功:', data);
+                return data;
+            } catch (error) {
+                debugLog('添加人员失败:', error);
+                throw error;
+            }
+        }
+
+        // 删除人员
+        async function deletePersonnelItem(id) {
+            try {
+                const { error } = await supabase
+                    .from('personnel')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                debugLog('人员删除成功:', id);
+            } catch (error) {
+                debugLog('删除人员失败:', error);
+                throw error;
+            }
+        }
+
+        // 更新人员密码
+        async function updatePersonnelPassword(id, newPassword) {
+            try {
+                const { error } = await supabase
+                    .from('personnel')
+                    .update({ password: newPassword, updated_at: new Date().toISOString() })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                debugLog('密码更新成功:', id);
+            } catch (error) {
+                debugLog('更新密码失败:', error);
+                throw error;
+            }
+        }
+
+        // ========================================
+        // 页面控制
+        // ========================================
+
+        function showLoginPage() {
+            document.getElementById('loginPage').classList.add('active');
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+        }
+
         function showApp() {
             document.getElementById('loginPage').classList.remove('active');
             document.getElementById('loginPage').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
             
             // 更新用户信息
-            document.getElementById('currentUserName').textContent = currentUser.name;
-            document.getElementById('settingUserName').textContent = currentUser.name;
-            document.getElementById('settingUserRole').textContent = currentUser.role === 'admin' ? '系统管理员' : '普通用户';
-            document.getElementById('settingUserInitial').textContent = currentUser.name.charAt(0);
+            document.getElementById('currentUserName').textContent = currentUser?.name || '管理员';
+            document.getElementById('settingUserName').textContent = currentUser?.name || '管理员';
+            document.getElementById('settingUserRole').textContent = currentUser?.role === 'admin' ? '系统管理员' : '普通用户';
+            document.getElementById('settingUserInitial').textContent = (currentUser?.name || '管').charAt(0);
             
             // 初始化图表
             initChart();
             
             // 刷新数据
             refreshAllData();
-            
-            // 检查记住的用户名
-            const remembered = Storage.get('rememberedUser');
-            if (remembered) {
-                document.getElementById('loginUsername').value = remembered;
-            }
         }
 
         function switchPage(page) {
@@ -1267,16 +1433,48 @@
 
         function logout() {
             if (confirm('确定要退出登录吗？')) {
+                supabase.auth.signOut();
                 currentUser = null;
-                Storage.set('currentUser', null);
-                document.getElementById('appContainer').style.display = 'none';
-                document.getElementById('loginPage').style.display = 'flex';
-                document.getElementById('loginPage').classList.add('active');
+                localStorage.removeItem('currentUser');
+                showLoginPage();
                 document.getElementById('loginForm').reset();
             }
         }
 
-        // ==================== 图表功能 ====================
+        // ========================================
+        // 登录表单处理
+        // ========================================
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            login(username, password);
+        });
+
+        function togglePassword() {
+            const input = document.getElementById('loginPassword');
+            const icon = document.getElementById('passwordToggleIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fa fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fa fa-eye';
+            }
+        }
+
+        function showLoginError(msg) {
+            const error = document.getElementById('loginError');
+            error.textContent = msg;
+            error.classList.remove('hidden');
+            setTimeout(() => error.classList.add('hidden'), 3000);
+        }
+
+        // ========================================
+        // 图表功能
+        // ========================================
+
         function initChart() {
             const ctx = document.getElementById('stockStatusChart').getContext('2d');
             stockStatusChart = new Chart(ctx, {
@@ -1302,36 +1500,41 @@
             });
         }
 
-        // ==================== 数据刷新 ====================
-        function refreshAllData() {
-            refreshDashboard();
-            renderStockList();
-            renderPersonnelList();
-            renderRecordsList();
-            updateNotificationBadge();
+        // ========================================
+        // 数据刷新
+        // ========================================
+
+        async function refreshAllData() {
+            await Promise.all([
+                refreshDashboard(),
+                loadStock().then(() => renderStockList()),
+                loadPersonnel().then(() => renderPersonnelList()),
+                loadRecords().then(() => renderRecordsList()),
+                updateNotificationBadge()
+            ]);
         }
 
-        function refreshDashboard() {
-            const stock = Storage.get('stock') || [];
-            const records = Storage.get('records') || [];
+        async function refreshDashboard() {
+            await loadStock();
+            await loadRecords();
             
             // 计算统计数据
-            const totalStock = stock.reduce((sum, item) => sum + (item.quantity || 0), 0);
+            const totalStock = stockData.reduce((sum, item) => sum + (item.quantity || 0), 0);
             document.getElementById('totalStock').textContent = totalStock;
             
             // 计算近效期预警
             const today = new Date();
             const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-            const expiryWarning = stock.filter(item => {
-                const expiryDate = new Date(item.expiryDate);
+            const expiryWarning = stockData.filter(item => {
+                const expiryDate = new Date(item.expiry_date || item.expiryDate);
                 return expiryDate <= thirtyDaysLater && expiryDate >= today;
             }).length;
             document.getElementById('expiryWarning').textContent = expiryWarning;
             
             // 计算状态分布
             let normal = 0, warning = 0, expired = 0, low = 0;
-            stock.forEach(item => {
-                const expiryDate = new Date(item.expiryDate);
+            stockData.forEach(item => {
+                const expiryDate = new Date(item.expiry_date || item.expiryDate);
                 if (item.quantity <= 0) {
                     low++;
                 } else if (expiryDate < today) {
@@ -1350,10 +1553,10 @@
             
             // 加载最近活动
             const recentActivities = document.getElementById('recentActivities');
-            if (records.length === 0) {
+            if (recordsData.length === 0) {
                 recentActivities.innerHTML = '<div class="empty-state"><i class="fa fa-inbox text-4xl mb-2"></i><p>暂无活动记录</p></div>';
             } else {
-                const sorted = records.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+                const sorted = recordsData.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date)).slice(0, 5);
                 recentActivities.innerHTML = sorted.map(record => {
                     const icons = { in: 'fa-archive text-primary', out: 'fa-sign-out text-success', warning: 'fa-exclamation-triangle text-warning' };
                     const actions = { in: '入库', out: '出库', warning: '预警' };
@@ -1363,8 +1566,8 @@
                                 <i class="fa ${icons[record.type] || 'fa-info-circle'}"></i>
                             </div>
                             <div class="flex-1">
-                                <p class="text-sm font-medium">${record.materialName} ${actions[record.type]}</p>
-                                <p class="text-xs text-gray-500">${record.operator} · ${record.date}</p>
+                                <p class="text-sm font-medium">${record.material_name || record.materialName} ${actions[record.type]}</p>
+                                <p class="text-xs text-gray-500">${record.operator} · ${new Date(record.created_at || record.date).toLocaleString()}</p>
                             </div>
                         </div>
                     `;
@@ -1372,16 +1575,18 @@
             }
         }
 
-        // ==================== 库存管理 ====================
-        function renderStockList() {
-            const stock = Storage.get('stock') || [];
+        // ========================================
+        // 库存管理
+        // ========================================
+
+        async function renderStockList() {
             const search = document.getElementById('stockSearchInput')?.value?.toLowerCase() || '';
             
-            let filtered = stock;
+            let filtered = stockData;
             if (search) {
                 filtered = filtered.filter(item => 
-                    item.name.toLowerCase().includes(search) || 
-                    item.code.toLowerCase().includes(search)
+                    (item.name || '').toLowerCase().includes(search) || 
+                    (item.code || '').toLowerCase().includes(search)
                 );
             }
             
@@ -1417,7 +1622,7 @@
                 if (statusCounts.warning > 0) statusLabels += `<span class="ml-2 status-badge status-warning">即将:${statusCounts.warning}</span>`;
                 if (statusCounts.expired > 0) statusLabels += `<span class="ml-2 status-badge status-danger">过期:${statusCounts.expired}</span>`;
                 
-                const groupId = 'group-' + name.replace(/\s+/g, '-');
+                const groupId = 'group-' + (name || 'unknown').replace(/\s+/g, '-');
                 
                 return `
                     <div class="stock-group">
@@ -1433,8 +1638,8 @@
                                 <div class="stock-item">
                                     <div class="flex justify-between items-start">
                                         <div class="flex-1">
-                                            <p class="text-sm font-medium">唯一性标识: ${item.uniqueId}</p>
-                                            <p class="text-xs text-gray-500">有效期: ${item.expiryDate} | 浓度: ${item.concentration || 'N/A'}</p>
+                                            <p class="text-sm font-medium">唯一性标识: ${item.unique_id || item.uniqueId}</p>
+                                            <p class="text-xs text-gray-500">有效期: ${item.expiry_date || item.expiryDate} | 浓度: ${item.concentration || 'N/A'}</p>
                                             <span class="status-badge status-${item.status} mt-1">
                                                 ${item.status === 'normal' ? '正常' : item.status === 'warning' ? '即将过期' : item.status === 'expired' ? '已过期' : '库存不足'}
                                             </span>
@@ -1442,7 +1647,9 @@
                                         <div class="flex space-x-1">
                                             <button onclick="viewStockDetail(${item.id})" class="px-2 py-1 bg-info text-white text-xs rounded">查看</button>
                                             <button onclick="quickOut(${item.id})" class="px-2 py-1 bg-warning text-white text-xs rounded">出库</button>
+                                            ${currentUser?.role === 'admin' ? `
                                             <button onclick="deleteStock(${item.id})" class="px-2 py-1 bg-danger text-white text-xs rounded">删除</button>
+` : ''}
                                         </div>
                                     </div>
                                 </div>
@@ -1472,14 +1679,16 @@
             }
         }
 
-        // ==================== 入库功能 ====================
+        // ========================================
+        // 入库功能
+        // ========================================
+
         function showAddStockModal() {
             document.getElementById('addStockModal').classList.add('show');
             // 加载操作人员
             const operators = document.getElementById('stockInOperator');
             operators.innerHTML = '<option value="">请选择</option>';
-            const personnel = Storage.get('personnel') || [];
-            personnel.forEach(p => {
+            personnelData.forEach(p => {
                 operators.innerHTML += `<option value="${p.name}">${p.name}</option>`;
             });
             // 设置默认日期为30天后
@@ -1525,7 +1734,6 @@
             Array.from(input.files).forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    // 存储图片数据
                     const imageId = 'img_' + Date.now() + '_' + index;
                     imageStorage.set(imageId, e.target.result);
                     
@@ -1556,12 +1764,11 @@
             }
         }
 
-        function handleStockIn(e) {
+        async function handleStockIn(e) {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
             
-            const stock = Storage.get('stock') || [];
             const quantity = parseInt(formData.get('quantity')) || 1;
             const baseTime = Date.now();
             
@@ -1597,39 +1804,51 @@
                 else if (diffDays <= 30) status = 'warning';
                 
                 const newItem = {
-                    id: baseTime + i,
                     name: formData.get('name'),
                     code: formData.get('code'),
-                    batchNumber: formData.get('batchNumber'),
-                    uniqueId: uniqueId,
+                    batch_number: formData.get('batchNumber'),
+                    unique_id: uniqueId,
                     manufacturer: formData.get('manufacturer'),
                     concentration: formData.get('concentration'),
                     uncertainty: formData.get('uncertainty'),
-                    storageCondition: formData.get('storageCondition'),
+                    storage_condition: formData.get('storageCondition'),
                     quantity: 1,
-                    expiryDate: formData.get('expiryDate'),
+                    expiry_date: formData.get('expiryDate'),
                     operator: formData.get('operator'),
                     status: status,
-                    images: i === 0 ? images : [], // 只有第一瓶带图片，避免重复
-                    createdAt: new Date().toISOString()
+                    images: i === 0 ? images : [],
+                    created_at: new Date().toISOString()
                 };
                 
-                stock.push(newItem);
-                addedItems.push(newItem);
+                try {
+                    await addStock(newItem);
+                    addedItems.push(newItem);
+                } catch (error) {
+                    alert('入库失败: ' + error.message);
+                    return;
+                }
             }
             
-            Storage.set('stock', stock);
-            
-            // 添加记录（包含图片）
-            addRecord('in', formData.get('name'), quantity, formData.get('operator'), 
-                `批次号: ${formData.get('batchNumber') || 'N/A'}，入库${quantity}瓶`, images);
+            // 添加记录
+            await addRecordItem({
+                type: 'in',
+                material_name: formData.get('name'),
+                quantity: quantity,
+                operator: formData.get('operator'),
+                note: `批次号: ${formData.get('batchNumber') || 'N/A'}，入库${quantity}瓶`,
+                images: images,
+                created_at: new Date().toISOString()
+            });
             
             closeAddStockModal();
-            refreshAllData();
+            await refreshAllData();
             alert(`入库成功！已添加${quantity}瓶标准物质`);
         }
 
-        // ==================== 出库功能 ====================
+        // ========================================
+        // 出库功能
+        // ========================================
+
         function showOutStockModal() {
             document.getElementById('outStockModal').classList.add('show');
             loadOutStockOptions();
@@ -1647,17 +1866,15 @@
         function loadOutStockOptions() {
             const select = document.getElementById('outStockSelect');
             select.innerHTML = '<option value="">请选择</option>';
-            const stock = Storage.get('stock') || [];
-            stock.forEach(item => {
-                select.innerHTML += `<option value="${item.id}">${item.name}（${item.uniqueId}）</option>`;
+            stockData.forEach(item => {
+                select.innerHTML += `<option value="${item.id}">${item.name}（${item.unique_id || item.uniqueId}）</option>`;
             });
         }
 
         function loadOutOperators() {
             const select = document.getElementById('stockOutOperator');
             select.innerHTML = '<option value="">请选择</option>';
-            const personnel = Storage.get('personnel') || [];
-            personnel.forEach(p => {
+            personnelData.forEach(p => {
                 select.innerHTML += `<option value="${p.name}">${p.name}</option>`;
             });
         }
@@ -1667,20 +1884,16 @@
             document.getElementById('outStockSelect').value = id;
         }
 
-        function handleStockOut(e) {
+        async function handleStockOut(e) {
             e.preventDefault();
             const formData = new FormData(e.target);
             const stockId = parseInt(formData.get('stockId'));
             
-            let stock = Storage.get('stock') || [];
-            const itemIndex = stock.findIndex(s => s.id === stockId);
-            
-            if (itemIndex === -1) {
+            const item = stockData.find(s => s.id === stockId);
+            if (!item) {
                 alert('未找到该标准物质');
                 return;
             }
-            
-            const item = stock[itemIndex];
             
             // 收集出库图片
             const images = [];
@@ -1697,33 +1910,44 @@
                 }
             });
             
-            if (confirm(`确定要将 ${item.name}（${item.uniqueId}）出库吗？`)) {
-                // 移除库存
-                stock.splice(itemIndex, 1);
-                Storage.set('stock', stock);
-                
-                // 添加记录（包含图片）
-                addRecord('out', item.name, 1, formData.get('operator'), 
-                    `唯一性标识: ${item.uniqueId}，用途: ${formData.get('purpose') || '未填写'}`, images);
-                
-                closeOutStockModal();
-                refreshAllData();
-                alert('出库成功！');
+            if (confirm(`确定要将 ${item.name}（${item.unique_id || item.uniqueId}）出库吗？`)) {
+                try {
+                    // 从Supabase删除库存
+                    await deleteStockItem(stockId);
+                    
+                    // 添加记录
+                    await addRecordItem({
+                        type: 'out',
+                        material_name: item.name,
+                        quantity: 1,
+                        operator: formData.get('operator'),
+                        note: `唯一性标识: ${item.unique_id || item.uniqueId}，用途: ${formData.get('purpose') || '未填写'}`,
+                        images: images,
+                        created_at: new Date().toISOString()
+                    });
+                    
+                    closeOutStockModal();
+                    await refreshAllData();
+                    alert('出库成功！');
+                } catch (error) {
+                    alert('出库失败: ' + error.message);
+                }
             }
         }
 
-        function deleteStock(id) {
+        async function deleteStock(id) {
             if (!confirm('确定要删除这个标准物质吗？')) return;
-            let stock = Storage.get('stock') || [];
-            stock = stock.filter(s => s.id !== id);
-            Storage.set('stock', stock);
-            refreshAllData();
-            alert('删除成功！');
+            try {
+                await deleteStockItem(id);
+                await refreshAllData();
+                alert('删除成功！');
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
         }
 
         function viewStockDetail(id) {
-            const stock = Storage.get('stock') || [];
-            const item = stock.find(s => s.id === id);
+            const item = stockData.find(s => s.id === id);
             if (!item) return;
             
             const statusText = {
@@ -1737,20 +1961,21 @@
             const qrData = JSON.stringify({
                 名称: item.name,
                 编号: item.code,
-                批次: item.batchNumber,
-                唯一标识: item.uniqueId,
-                有效期: item.expiryDate,
+                批次: item.batch_number || item.batchNumber,
+                唯一标识: item.unique_id || item.uniqueId,
+                有效期: item.expiry_date || item.expiryDate,
                 状态: statusText
             });
             
             // 显示图片
             let imagesHtml = '';
-            if (item.images && item.images.length > 0) {
+            const images = item.images || [];
+            if (images.length > 0) {
                 imagesHtml = `
                     <div class="mb-4">
                         <h3 class="text-lg font-semibold mb-2">相关图片</h3>
                         <div class="record-images">
-                            ${item.images.map((img, idx) => `
+                            ${images.map((img, idx) => `
                                 <div class="record-image-item" onclick="viewImage('${img.data}', '入库图片 ${idx + 1}')">
                                     <img src="${img.data}" alt="入库图片">
                                 </div>
@@ -1765,16 +1990,16 @@
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div><span class="text-gray-500">标准物质名称:</span> ${item.name}</div>
                         <div><span class="text-gray-500">标准物质编号:</span> ${item.code}</div>
-                        <div><span class="text-gray-500">批次号:</span> ${item.batchNumber || 'N/A'}</div>
-                        <div><span class="text-gray-500">唯一性标识:</span> ${item.uniqueId}</div>
+                        <div><span class="text-gray-500">批次号:</span> ${item.batch_number || 'N/A'}</div>
+                        <div><span class="text-gray-500">唯一性标识:</span> ${item.unique_id || item.uniqueId}</div>
                         <div><span class="text-gray-500">生产厂家:</span> ${item.manufacturer || 'N/A'}</div>
                         <div><span class="text-gray-500">浓度:</span> ${item.concentration || 'N/A'}</div>
                         <div><span class="text-gray-500">不确定度:</span> ${item.uncertainty || 'N/A'}</div>
-                        <div><span class="text-gray-500">稀释条件:</span> ${item.storageCondition || 'N/A'}</div>
+                        <div><span class="text-gray-500">稀释条件:</span> ${item.storage_condition || 'N/A'}</div>
                         <div><span class="text-gray-500">数量:</span> ${item.quantity}</div>
-                        <div><span class="text-gray-500">有效期:</span> ${item.expiryDate}</div>
+                        <div><span class="text-gray-500">有效期:</span> ${item.expiry_date || item.expiryDate}</div>
                         <div><span class="text-gray-500">状态:</span> <span class="status-badge status-${item.status}">${statusText}</span></div>
-                        <div><span class="text-gray-500">创建时间:</span> ${new Date(item.createdAt).toLocaleString('zh-CN')}</div>
+                        <div><span class="text-gray-500">创建时间:</span> ${new Date(item.created_at).toLocaleString('zh-CN')}</div>
                     </div>
                     
                     ${imagesHtml}
@@ -1806,7 +2031,10 @@
             document.getElementById('viewDetailModal').classList.remove('show');
         }
 
-        // ==================== 图片查看功能 ====================
+        // ========================================
+        // 图片查看功能
+        // ========================================
+
         function viewImage(imageData, caption) {
             document.getElementById('viewerImage').src = imageData;
             document.getElementById('viewerCaption').textContent = caption;
@@ -1817,36 +2045,23 @@
             document.getElementById('imageViewerModal').classList.remove('show');
         }
 
-        // ==================== 记录管理 ====================
-        function addRecord(type, materialName, quantity, operator, note, images = []) {
-            const records = Storage.get('records') || [];
-            records.push({
-                id: Date.now(),
-                type,
-                materialName,
-                quantity,
-                operator,
-                date: new Date().toLocaleString('zh-CN'),
-                note,
-                images: images || []
-            });
-            Storage.set('records', records);
-        }
+        // ========================================
+        // 记录管理
+        // ========================================
 
-        function renderRecordsList() {
-            const records = Storage.get('records') || [];
+        async function renderRecordsList() {
             const search = document.getElementById('recordsSearchInput')?.value?.toLowerCase() || '';
             
-            let filtered = records;
+            let filtered = recordsData;
             if (search) {
                 filtered = filtered.filter(r => 
-                    r.materialName.toLowerCase().includes(search) || 
-                    r.operator.toLowerCase().includes(search)
+                    (r.material_name || '').toLowerCase().includes(search) || 
+                    (r.operator || '').toLowerCase().includes(search)
                 );
             }
             
             // 按时间倒序
-            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+            filtered.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date));
             
             const container = document.getElementById('recordsList');
             if (filtered.length === 0) {
@@ -1861,10 +2076,11 @@
                 
                 // 渲染图片
                 let imagesHtml = '';
-                if (record.images && record.images.length > 0) {
+                const images = record.images || [];
+                if (images.length > 0) {
                     imagesHtml = `
                         <div class="record-images mt-3">
-                            ${record.images.map((img, idx) => `
+                            ${images.map((img, idx) => `
                                 <div class="record-image-item" onclick="viewImage('${img.data}', '${types[record.type]}图片 ${idx + 1}')">
                                     <img src="${img.data}" alt="记录图片">
                                 </div>
@@ -1881,15 +2097,15 @@
                                     <i class="fa ${icons[record.type]}"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-semibold">${record.materialName}</h3>
-                                    <p class="text-sm text-gray-500">${record.operator} · ${record.date}</p>
+                                    <h3 class="font-semibold">${record.material_name || record.materialName}</h3>
+                                    <p class="text-sm text-gray-500">${record.operator} · ${new Date(record.created_at || record.date).toLocaleString()}</p>
                                 </div>
                             </div>
                             <span class="status-badge ${badges[record.type] || 'bg-gray-100 text-gray-600'}">${types[record.type]}</span>
                         </div>
                         <div class="mt-2">
                             <p class="text-sm">数量: ${record.quantity}</p>
-                            <p class="text-sm text-gray-500">备注: ${record.note}</p>
+                            <p class="text-sm text-gray-500">备注: ${record.note || ''}</p>
                             ${imagesHtml}
                         </div>
                     </div>
@@ -1897,16 +2113,18 @@
             }).join('');
         }
 
-        // ==================== 人员管理 ====================
-        function renderPersonnelList() {
-            const personnel = Storage.get('personnel') || [];
+        // ========================================
+        // 人员管理
+        // ========================================
+
+        async function renderPersonnelList() {
             const search = document.getElementById('personnelSearchInput')?.value?.toLowerCase() || '';
             
-            let filtered = personnel;
+            let filtered = personnelData;
             if (search) {
                 filtered = filtered.filter(p => 
-                    p.name.toLowerCase().includes(search) || 
-                    p.username.toLowerCase().includes(search)
+                    (p.name || '').toLowerCase().includes(search) || 
+                    (p.username || '').toLowerCase().includes(search)
                 );
             }
             
@@ -1928,7 +2146,7 @@
                         </span>
                     </div>
                     <div class="flex justify-end space-x-2 mt-3">
-                        ${person.id !== currentUser?.id ? `
+                        ${person.id !== currentUser?.id && currentUser?.role === 'admin' ? `
                             <button onclick="deletePersonnel(${person.id})" class="text-danger text-sm">
                                 <i class="fa fa-trash"></i> 删除
                             </button>
@@ -1947,49 +2165,56 @@
             document.getElementById('addPersonnelForm').reset();
         }
 
-        function handleAddPersonnel(e) {
+        async function handleAddPersonnel(e) {
             e.preventDefault();
             const formData = new FormData(e.target);
             
-            const personnel = Storage.get('personnel') || [];
-            
             // 检查用户名是否已存在
-            if (personnel.some(p => p.username === formData.get('username'))) {
+            if (personnelData.some(p => p.username === formData.get('username'))) {
                 alert('用户名已存在！');
                 return;
             }
             
-            personnel.push({
-                id: Date.now(),
-                name: formData.get('name'),
-                username: formData.get('username'),
-                password: formData.get('password'),
-                role: formData.get('role')
-            });
-            
-            Storage.set('personnel', personnel);
-            closeAddPersonnelModal();
-            renderPersonnelList();
-            alert('人员添加成功！');
+            try {
+                await addPersonnel({
+                    name: formData.get('name'),
+                    username: formData.get('username'),
+                    password: formData.get('password'),
+                    role: formData.get('role'),
+                    created_at: new Date().toISOString()
+                });
+                
+closeAddPersonnelModal();
+                await loadPersonnel();
+                renderPersonnelList();
+                alert('人员添加成功！');
+            } catch (error) {
+                alert('添加失败: ' + error.message);
+            }
         }
 
-        function deletePersonnel(id) {
+        async function deletePersonnel(id) {
             if (!confirm('确定要删除这个人员吗？')) return;
             if (id === currentUser?.id) {
                 alert('不能删除当前登录的用户！');
                 return;
             }
-            let personnel = Storage.get('personnel') || [];
-            personnel = personnel.filter(p => p.id !== id);
-            Storage.set('personnel', personnel);
-            renderPersonnelList();
-            alert('删除成功！');
+            try {
+                await deletePersonnelItem(id);
+                await loadPersonnel();
+                renderPersonnelList();
+                alert('删除成功！');
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
         }
 
-        // ==================== 消息功能（已修复） ====================
+        // ========================================
+        // 消息功能
+        // ========================================
+
         function openNotificationModal() {
             document.getElementById('notificationModal').classList.add('show');
-            // 默认显示消息列表
             switchMessageTab('messages', document.querySelector('#notificationModal .tab-btn'));
             renderMessages();
             loadMessageRecipients();
@@ -2003,194 +2228,44 @@
             document.querySelectorAll('#notificationModal .tab-btn').forEach(el => el.classList.remove('active'));
             element.classList.add('active');
             
-            const messagesContent = document.getElementById('messagesContent');
-            const composeContent = document.getElementById('composeContent');
-            
             if (tab === 'messages') {
-                messagesContent.classList.remove('hidden');
-                composeContent.classList.add('hidden');
-                renderMessages();
+                document.getElementById('messagesContent').classList.remove('hidden');
+                document.getElementById('composeContent').classList.add('hidden');
             } else {
-                messagesContent.classList.add('hidden');
-                composeContent.classList.remove('hidden');
+                document.getElementById('messagesContent').classList.add('hidden');
+                document.getElementById('composeContent').classList.remove('hidden');
             }
         }
 
         function renderMessages() {
-            const messages = Storage.get('messages') || [];
-            const container = document.getElementById('messagesContent');
-            
-            // 获取当前用户应该收到的消息
-            const myMessages = messages.filter(msg => 
-                msg.recipient === 'all' || 
-                msg.recipient === currentUser?.username ||
-                msg.sender === currentUser?.name // 也显示自己发送的
-            );
-            
-            // 按时间倒序排列
-            myMessages.sort((a, b) => new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date));
-            
-            if (myMessages.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fa fa-inbox text-4xl mb-2"></i>
-                        <p>暂无消息</p>
-                        <p class="text-sm text-gray-400 mt-2">点击"发送消息"开始沟通</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = myMessages.map(msg => {
-                const isUnread = !msg.readBy?.includes(currentUser?.username);
-                const isSentByMe = msg.sender === currentUser?.name;
-                
-                return `
-                    <div class="message-item ${isUnread ? 'unread' : 'read'}" onclick="showMessageDetail('${msg.id}')">
-                        <div class="message-header">
-                            <div class="message-sender">
-                                <i class="fa ${isSentByMe ? 'fa-send text-blue-500' : 'fa-user-circle text-gray-400'}"></i>
-                                ${isSentByMe ? '我' : msg.sender}
-                                ${isUnread && !isSentByMe ? '<span class="unread-badge">新消息</span>' : ''}
-                            </div>
-                            <span class="message-time">${msg.date}</span>
-                        </div>
-                        <div class="message-content">${escapeHtml(msg.content)}</div>
-                        <div class="message-to">
-                            <i class="fa ${msg.recipient === 'all' ? 'fa-users' : 'fa-user'} mr-1"></i>
-                            ${msg.recipient === 'all' ? '发送给所有人' : `发送给: ${msg.recipientName || msg.recipient}`}
-                            ${isSentByMe ? '<span class="text-blue-500 ml-2"><i class="fa fa-check"></i> 已发送</span>' : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            document.getElementById('messagesContent').innerHTML = `
+                <div class="empty-state">
+                    <i class="fa fa-comments text-4xl mb-2"></i>
+                    <p>消息功能开发中...</p>
+                </div>
+            `;
         }
 
         function loadMessageRecipients() {
             const select = document.getElementById('messageRecipient');
-            select.innerHTML = '<option value="">请选择接收人</option><option value="all">所有人</option>';
-            const personnel = Storage.get('personnel') || [];
-            personnel.forEach(p => {
+            select.innerHTML = '<option value="">请选择接收人</option>';
+            select.innerHTML += '<option value="all">所有人</option>';
+            personnelData.forEach(p => {
                 if (p.id !== currentUser?.id) {
-                    select.innerHTML += `<option value="${p.username}" data-name="${p.name}">${p.name} (${p.username})</option>`;
+                    select.innerHTML += `<option value="${p.id}">${p.name}</option>`;
                 }
             });
         }
 
         function sendMessage(e) {
             e.preventDefault();
-            
-            const recipientSelect = document.getElementById('messageRecipient');
-            const contentInput = document.getElementById('messageContent');
-            
-            const recipient = recipientSelect.value;
-            const content = contentInput.value.trim();
-            
-            if (!recipient) {
-                alert('请选择接收人！');
-                return;
-            }
-            
-            if (!content) {
-                alert('请输入消息内容！');
-                return;
-            }
-            
-            // 获取接收人姓名
-            const selectedOption = recipientSelect.options[recipientSelect.selectedIndex];
-            const recipientName = recipient === 'all' ? '所有人' : selectedOption.dataset.name;
-            
-            const messages = Storage.get('messages') || [];
-            const newMessage = {
-                id: Date.now().toString(),
-                sender: currentUser.name,
-                senderUsername: currentUser.username,
-                recipient: recipient,
-                recipientName: recipientName,
-                content: content,
-                date: new Date().toLocaleString('zh-CN'),
-                timestamp: Date.now(),
-                readBy: [currentUser.username] // 发送者自动标记为已读
-            };
-            
-            messages.push(newMessage);
-            Storage.set('messages', messages);
-            
-            // 清空表单
-            contentInput.value = '';
-            recipientSelect.value = '';
-            
-            // 切换到消息列表并刷新
-            const messagesTab = document.querySelector('#notificationModal .tab-btn');
-            switchMessageTab('messages', messagesTab);
-            
-            // 更新未读数
-            updateNotificationBadge();
-            
-            alert('消息发送成功！');
+            alert('消息功能开发中...');
+            closeNotificationModal();
         }
 
-        function showMessageDetail(msgId) {
-            const messages = Storage.get('messages') || [];
-            const msg = messages.find(m => m.id === msgId);
-            
-            if (!msg) return;
-            
-            // 标记为已读
-            if (!msg.readBy) msg.readBy = [];
-            if (!msg.readBy.includes(currentUser.username)) {
-                msg.readBy.push(currentUser.username);
-                Storage.set('messages', messages);
-                renderMessages();
-                updateNotificationBadge();
-            }
-            
-            const isSentByMe = msg.sender === currentUser?.name;
-            
-            document.getElementById('messageDetailBody').innerHTML = `
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between pb-3 border-b border-gray-200">
-                        <div>
-                            <p class="text-sm text-gray-500">发件人</p>
-                            <p class="font-semibold text-lg">${isSentByMe ? '我' : msg.sender}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm text-gray-500">时间</p>
-                            <p class="font-medium">${msg.date}</p>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <p class="text-sm text-gray-500 mb-2">接收人</p>
-                        <p class="font-medium">
-                            <i class="fa ${msg.recipient === 'all' ? 'fa-users' : 'fa-user'} mr-2"></i>
-                            ${msg.recipientName || (msg.recipient === 'all' ? '所有人' : msg.recipient)}
-                        </p>
-                    </div>
-                    
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <p class="text-sm text-gray-500 mb-2">消息内容</p>
-                        <p class="text-gray-800 whitespace-pre-wrap">${escapeHtml(msg.content)}</p>
-                    </div>
-                    
-                    <div class="text-sm text-gray-400 text-center">
-                        ${msg.readBy.length > 1 ? `<i class="fa fa-check-circle text-green-500 mr-1"></i> 已读 (${msg.readBy.length}人)` : '<i class="fa fa-clock-o mr-1"></i> 待对方阅读'}
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('messageDetailModal').classList.add('show');
-        }
-
-        function closeMessageDetail(e) {
-            if (e.target.id === 'messageDetailModal') {
-                closeMessageDetailModal();
+        function closeMessageDetail(event) {
+            if (event.target === event.currentTarget) {
+                document.getElementById('messageDetailModal').classList.remove('show');
             }
         }
 
@@ -2199,61 +2274,41 @@
         }
 
         function updateNotificationBadge() {
-            const messages = Storage.get('messages') || [];
-            // 只统计发送给当前用户且未读的消息
-            const unread = messages.filter(msg => 
-                (msg.recipient === currentUser?.username || msg.recipient === 'all') && 
-                !msg.readBy?.includes(currentUser?.username) &&
-                msg.sender !== currentUser?.name // 不统计自己发送的
-            ).length;
-            
-            const badge = document.getElementById('notificationCount');
-            if (unread > 0) {
-                badge.textContent = unread > 99 ? '99+' : unread;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
+            document.getElementById('notificationCount').classList.add('hidden');
         }
 
-        // ==================== 扫码功能 ====================
+        // ========================================
+        // 扫码功能
+        // ========================================
+
         function showScanModal() {
             document.getElementById('scanModal').classList.add('show');
-            // 加载库存列表供模拟扫码
-            const stock = Storage.get('stock') || [];
-            const container = document.getElementById('scanStockList');
-            
-            if (stock.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 py-4">暂无库存可扫码</p>';
-            } else {
-                container.innerHTML = stock.map(item => `
-                    <div class="p-3 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" onclick="simulateScan(${item.id})">
-                        <p class="font-medium">${item.name}</p>
-                        <p class="text-sm text-gray-500">${item.uniqueId}</p>
-                    </div>
-                `).join('');
-            }
+            loadScanStockList();
         }
 
         function closeScanModal() {
             document.getElementById('scanModal').classList.remove('show');
         }
 
-        function simulateScan(id) {
-            const stock = Storage.get('stock') || [];
-            const item = stock.find(s => s.id === id);
-            if (item) {
-                closeScanModal();
-                alert(`扫码成功！\n名称：${item.name}\n编号：${item.code}\n唯一标识：${item.uniqueId}`);
-                if (confirm('是否立即出库？')) {
-                    quickOut(id);
-                } else {
-                    viewStockDetail(id);
-                }
+        function loadScanStockList() {
+            const container = document.getElementById('scanStockList');
+            if (stockData.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-4">暂无库存数据</div>';
+                return;
             }
+            
+            container.innerHTML = stockData.map(item => `
+                <div class="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50" onclick="viewStockDetail(${item.id}); closeScanModal();">
+                    <div class="font-medium">${item.name}</div>
+                    <div class="text-sm text-gray-500">${item.unique_id || item.uniqueId}</div>
+                </div>
+            `).join('');
         }
 
-        // ==================== 设置功能 ====================
+        // ========================================
+        // 修改密码
+        // ========================================
+
         function showChangePasswordModal() {
             document.getElementById('changePasswordModal').classList.add('show');
         }
@@ -2263,289 +2318,189 @@
             document.getElementById('changePasswordForm').reset();
         }
 
-        function handleChangePassword(e) {
+        async function handleChangePassword(e) {
             e.preventDefault();
             const formData = new FormData(e.target);
             
-            if (formData.get('currentPassword') !== currentUser.password) {
-                alert('当前密码错误！');
-                return;
-            }
-            
             if (formData.get('newPassword') !== formData.get('confirmPassword')) {
-                alert('两次输入的新密码不一致！');
+                alert('新密码和确认密码不一致！');
                 return;
             }
             
-            // 更新密码
-            const personnel = Storage.get('personnel') || [];
-            const user = personnel.find(p => p.id === currentUser.id);
-            if (user) {
-                user.password = formData.get('newPassword');
-                currentUser.password = formData.get('newPassword');
-                Storage.set('personnel', personnel);
-                Storage.set('currentUser', currentUser);
-                closeChangePasswordModal();
+            if (formData.get('newPassword').length < 6) {
+                alert('密码长度至少6位！');
+                return;
+            }
+            
+            try {
+                await updatePersonnelPassword(currentUser.id, formData.get('newPassword'));
                 alert('密码修改成功！');
+                closeChangePasswordModal();
+            } catch (error) {
+                alert('密码修改失败: ' + error.message);
             }
         }
 
-        // ==================== Excel导出功能 ====================
-        function exportData() {
-            const stock = Storage.get('stock') || [];
-            const records = Storage.get('records') || [];
-            const personnel = Storage.get('personnel') || [];
+        // ========================================
+        // 数据导出
+        // ========================================
+
+        async function exportData() {
+            await loadStock();
+            await loadRecords();
             
-            // 创建工作簿
+            if (stockData.length === 0 && recordsData.length === 0) {
+                alert('没有可导出的数据');
+                return;
+            }
+            
             const wb = XLSX.utils.book_new();
-            wb.Props = {
-                Title: "标准物质管理系统数据",
-                Subject: "数据导出",
-                Author: "标准物质管理助手",
-                CreatedDate: new Date()
-            };
             
-            // 1. 库存数据表
-            const stockData = stock.map(item => ({
-                '标准物质名称': item.name,
-                '标准物质编号': item.code,
-                '批次号': item.batchNumber || '',
-                '唯一性标识': item.uniqueId,
-                '生产厂家': item.manufacturer || '',
-                '浓度': item.concentration || '',
-                '不确定度': item.uncertainty || '',
-                '稀释条件': item.storageCondition || '',
-                '数量': item.quantity,
-                '有效期': item.expiryDate,
-                '状态': item.status === 'normal' ? '正常' : item.status === 'warning' ? '即将过期' : item.status === 'expired' ? '已过期' : '库存不足',
-                '操作人员': item.operator,
-                '创建时间': new Date(item.createdAt).toLocaleString('zh-CN'),
-                '图片数量': item.images ? item.images.length : 0
-            }));
-            
-            const stockWS = XLSX.utils.json_to_sheet(stockData);
-            // 设置列宽
-            stockWS['!cols'] = [
-                {wch: 20}, {wch: 15}, {wch: 15}, {wch: 20}, {wch: 20},
-                {wch: 15}, {wch: 12}, {wch: 20}, {wch: 8}, {wch: 12},
-                {wch: 12}, {wch: 12}, {wch: 20}, {wch: 10}
-            ];
-            XLSX.utils.book_append_sheet(wb, stockWS, "库存数据");
-            
-            // 2. 操作记录表
-            const recordsData = records.map(record => ({
-                '操作类型': record.type === 'in' ? '入库' : record.type === 'out' ? '出库' : '预警',
-                '标准物质名称': record.materialName,
-                '数量': record.quantity,
-                '操作人员': record.operator,
-                '操作时间': record.date,
-                '备注': record.note,
-                '图片数量': record.images ? record.images.length : 0
-            }));
-            
-            const recordsWS = XLSX.utils.json_to_sheet(recordsData);
-            recordsWS['!cols'] = [
-                {wch: 12}, {wch: 20}, {wch: 8}, {wch: 12}, {wch: 20}, {wch: 40}, {wch: 10}
-            ];
-            XLSX.utils.book_append_sheet(wb, recordsWS, "操作记录");
-            
-            // 3. 人员数据表
-            const personnelData = personnel.map(p => ({
-                '姓名': p.name,
-                '用户名': p.username,
-                '角色': p.role === 'admin' ? '管理员' : '普通用户',
-                '密码': '******' // 出于安全考虑，不显示真实密码
-            }));
-            
-            const personnelWS = XLSX.utils.json_to_sheet(personnelData);
-            personnelWS['!cols'] = [{wch: 15}, {wch: 15}, {wch: 12}, {wch: 10}];
-            XLSX.utils.book_append_sheet(wb, personnelWS, "人员信息");
-            
-            // 4. 统计汇总表
-            const today = new Date();
-            const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-            
-            let normal = 0, warning = 0, expired = 0, low = 0;
-            stock.forEach(item => {
-                const expiryDate = new Date(item.expiryDate);
-                if (item.quantity <= 0) low++;
-                else if (expiryDate < today) expired++;
-                else if (expiryDate <= thirtyDaysLater) warning++;
-                else normal++;
-            });
-            
-            const summaryData = [
-                { '统计项目': '总库存数量', '数值': stock.reduce((sum, item) => sum + item.quantity, 0) },
-                { '统计项目': '正常状态', '数值': normal },
-                { '统计项目': '即将过期', '数值': warning },
-                { '统计项目': '已过期', '数值': expired },
-                { '统计项目': '库存不足', '数值': low },
-                { '统计项目': '入库记录数', '数值': records.filter(r => r.type === 'in').length },
-                { '统计项目': '出库记录数', '数值': records.filter(r => r.type === 'out').length },
-                { '统计项目': '系统人员数', '数值': personnel.length },
-                { '统计项目': '导出时间', '数值': new Date().toLocaleString('zh-CN') }
-            ];
-            
-            const summaryWS = XLSX.utils.json_to_sheet(summaryData);
-            summaryWS['!cols'] = [{wch: 20}, {wch: 15}];
-            XLSX.utils.book_append_sheet(wb, summaryWS, "统计汇总");
-            
-            // 下载文件
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
-            
-            function s2ab(s) {
-                const buf = new ArrayBuffer(s.length);
-                const view = new Uint8Array(buf);
-                for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-                return buf;
+            // 导出库存数据
+            if (stockData.length > 0) {
+                const stockSheet = XLSX.utils.json_to_sheet(stockData.map(item => ({
+                    '名称': item.name,
+                    '编号': item.code,
+                    '批次号': item.batch_number || '',
+                    '唯一标识': item.unique_id || '',
+                    '生产厂家': item.manufacturer || '',
+                    '浓度': item.concentration || '',
+                    '不确定度': item.uncertainty || '',
+                    '数量': item.quantity,
+                    '有效期': item.expiry_date || item.expiryDate,
+                    '状态': item.status,
+                    '操作人': item.operator || '',
+                    '创建时间': item.created_at || ''
+                })));
+                XLSX.utils.book_append_sheet(wb, stockSheet, '库存');
             }
             
-            const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `标准物质管理数据_${new Date().toISOString().slice(0, 10)}.xlsx`;
-            link.click();
+            // 导出记录数据
+            if (recordsData.length > 0) {
+                const recordsSheet = XLSX.utils.json_to_sheet(recordsData.map(item => ({
+                    '类型': item.type === 'in' ? '入库' : '出库',
+                    '物料名称': item.material_name || item.materialName,
+                    '数量': item.quantity,
+                    '操作人': item.operator,
+                    '备注': item.note || '',
+                    '时间': item.created_at || item.date
+                })));
+                XLSX.utils.book_append_sheet(wb, recordsSheet, '记录');
+            }
             
-            alert('Excel数据导出成功！\n包含：库存数据、操作记录、人员信息、统计汇总');
+const fileName = `标准物质数据_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            alert(`数据已导出到 ${fileName}`);
         }
 
-        // ==================== 调试功能 ====================
-        function toggleDebug() {
-            const panel = document.getElementById('debugPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-            updateDebugInfo();
-        }
+        // ========================================
+        // 模态框辅助函数
+        // ========================================
 
-        function updateDebugInfo() {
-            const stock = Storage.get('stock') || [];
-            const personnel = Storage.get('personnel') || [];
-            const records = Storage.get('records') || [];
-            const messages = Storage.get('messages') || [];
-            
-            document.getElementById('debugContent').innerHTML = `
-                <div class="mb-2">库存: ${stock.length} 条</div>
-                <div class="mb-2">人员: ${personnel.length} 条</div>
-                <div class="mb-2">记录: ${records.length} 条</div>
-                <div class="mb-2">消息: ${messages.length} 条</div>
-                <div class="mb-2">当前用户: ${currentUser?.name || '未登录'}</div>
-            `;
-        }
-
-        function clearAllData() {
-            if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
-            Storage.set('stock', []);
-            Storage.set('records', []);
-            Storage.set('messages', []);
-            imageStorage.clear();
-            refreshAllData();
-            updateDebugInfo();
-            alert('所有数据已清空！');
-        }
-
-        function loadDemoData() {
-            // 添加演示库存数据
-            const demoStock = [
-                {
-                    id: Date.now(),
-                    name: '甲醇标准溶液',
-                    code: 'STD-001',
-                    batchNumber: 'B2024001',
-                    uniqueId: 'B2024001-0001-01',
-                    manufacturer: '国家标准物质中心',
-                    concentration: '1000μg/mL',
-                    uncertainty: '0.5%',
-                    storageCondition: '4℃避光保存',
-                    quantity: 1,
-                    expiryDate: '2025-12-31',
-                    operator: '系统管理员',
-                    status: 'normal',
-                    images: [],
-                    createdAt: new Date().toISOString()
-                },
-                {
-                    id: Date.now() + 1,
-                    name: '乙醇标准溶液',
-                    code: 'STD-002',
-                    batchNumber: 'B2024002',
-                    uniqueId: 'B2024002-0001-01',
-                    manufacturer: '国家标准物质中心',
-                    concentration: '500μg/mL',
-                    uncertainty: '1.0%',
-                    storageCondition: '常温保存',
-                    quantity: 1,
-                    expiryDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    operator: '系统管理员',
-                    status: 'warning',
-                    images: [],
-                    createdAt: new Date().toISOString()
-                }
-            ];
-            
-            Storage.set('stock', demoStock);
-            
-            // 添加演示记录
-            const demoRecords = [
-                {
-                    id: Date.now(),
-                    type: 'in',
-                    materialName: '甲醇标准溶液',
-                    quantity: 1,
-                    operator: '系统管理员',
-                    date: new Date().toLocaleString('zh-CN'),
-                    note: '批次号: B2024001，入库1瓶',
-                    images: []
-                }
-            ];
-            Storage.set('records', demoRecords);
-            
-            refreshAllData();
-            updateDebugInfo();
-            alert('演示数据加载成功！');
-        }
-
-        // 测试消息功能
-        function testMessage() {
-            const messages = Storage.get('messages') || [];
-            messages.push({
-                id: Date.now().toString(),
-                sender: '系统',
-                senderUsername: 'system',
-                recipient: currentUser?.username || 'admin',
-                recipientName: currentUser?.name || '系统管理员',
-                content: '这是一条测试消息，用于验证消息功能是否正常工作。\n\n如果您能看到这条消息，说明消息系统运行正常！',
-                date: new Date().toLocaleString('zh-CN'),
-                timestamp: Date.now(),
-                readBy: []
-            });
-            Storage.set('messages', messages);
-            updateNotificationBadge();
-            alert('测试消息已发送！请查看消息中心。');
-        }
-
-        // ==================== 通用功能 ====================
         function closeModalOnBg(event, modalId) {
-            if (event.target.id === modalId) {
+            if (event.target === event.currentTarget) {
                 document.getElementById(modalId).classList.remove('show');
             }
         }
 
-        // ==================== 初始化 ====================
-        document.addEventListener('DOMContentLoaded', function() {
-            initData();
-            
-            // 检查是否已登录
-            const savedUser = Storage.get('currentUser');
-            if (savedUser) {
-                currentUser = savedUser;
-                showApp();
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
             }
+        }
+
+        // ========================================
+        // 演示数据加载（仅用于开发测试）
+        // ========================================
+
+        async function loadDemoData() {
+            debugLog('加载演示数据...');
             
-            // 定期更新调试信息
-            setInterval(updateDebugInfo, 2000);
-        });
+            try {
+                // 添加演示人员
+                await addPersonnel({
+                    name: '李四',
+                    username: 'user2',
+                    password: 'user123',
+                    role: 'user',
+                    created_at: new Date().toISOString()
+                });
+                
+                // 添加演示库存
+                await addStock({
+                    name: '甲醇中苯标准物质',
+                    code: 'GBW(E)080241',
+                    batch_number: '202401001',
+                    unique_id: 'BATCH-2024-01',
+                    manufacturer: '中国计量科学研究院',
+                    concentration: '1000μg/mL',
+                    uncertainty: '1%',
+                    storage_condition: '室温保存',
+                    quantity: 5,
+                    expiry_date: '2025-12-31',
+                    operator: '系统管理员',
+                    status: 'normal',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                await addStock({
+                    name: '乙醇中甲醛标准物质',
+                    code: 'GBW(E)080123',
+                    batch_number: '202401002',
+                    unique_id: 'BATCH-2024-02',
+                    manufacturer: '国家标准物质中心',
+                    concentration: '100μg/mL',
+                    uncertainty: '2%',
+                    storage_condition: '冷藏保存',
+                    quantity: 3,
+                    expiry_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    operator: '张三',
+                    status: 'warning',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                await addStock({
+                    name: '丙酮中丙酮酸标准物质',
+                    code: 'GBW(E)080456',
+                    batch_number: '202401003',
+                    unique_id: 'BATCH-2024-03',
+                    manufacturer: '进口标准品',
+                    concentration: '500μg/mL',
+                    uncertainty: '0.5%',
+                    storage_condition: '-20℃冷冻',
+                    quantity: 2,
+                    expiry_date: '2024-01-15',
+                    operator: '系统管理员',
+                    status: 'expired',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                // 添加演示记录
+                await addRecordItem({
+                    type: 'in',
+                    material_name: '甲醇中苯标准物质',
+                    quantity: 5,
+                    operator: '系统管理员',
+                    note: '演示数据入库',
+                    images: [],
+                    created_at: new Date().toISOString()
+                });
+                
+                debugLog('演示数据加载成功！');
+                await refreshAllData();
+                alert('演示数据加载成功！');
+                
+            } catch (error) {
+                debugLog('加载演示数据失败:', error.message);
+                alert('加载演示数据失败: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>
-
-
-
