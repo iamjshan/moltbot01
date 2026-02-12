@@ -1,0 +1,3176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>标准物质管理助手 - Supabase版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Supabase客户端 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6', primaryDark: '#2563eb',
+                        success: '#22c55e', danger: '#ef4444',
+                        warning: '#f59e0b', info: '#0ea5e9',
+                        background: '#f1f5f9', surface: '#ffffff'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { height: 100%; margin: 0; padding: 0; }
+        body { font-family: 'Inter', 'PingFang SC', sans-serif; background: #f1f5f9; }
+        
+        .page { display: none; min-height: 100vh; padding-bottom: 80px; }
+        .page.active { display: block; }
+        
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 1rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
+        }
+        
+        .content { margin-top: 4.5rem; padding: 1rem; }
+        
+        .card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .stat-icon {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        
+        .quick-action-btn {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .quick-action-btn:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem;
+            color: #64748b;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .nav-item.active { color: #3b82f6; }
+        .nav-item i { font-size: 1.25rem; margin-bottom: 0.25rem; }
+        .nav-item span { font-size: 0.75rem; }
+        
+        .footer {
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .modal.show { display: flex; }
+        
+        .modal-content {
+            background: white;
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 28rem;
+            max-height: 85vh;
+            overflow-y: auto;
+            animation: modalSlideUp 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @keyframes modalSlideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-header {
+            background: #3b82f6;
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .tab-btn.active {
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.625rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background: #d1d5db; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-warning { background: #f59e0b; color: white; }
+        
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-normal { background: #dcfce7; color: #166534; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+        .status-danger { background: #fee2e2; color: #991b1b; }
+        .status-info { background: #dbeafe; color: #1e40af; }
+        
+        .stock-group { border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; margin-bottom: 1rem; }
+        .stock-group-header { background: #f8fafc; padding: 1rem; cursor: pointer; }
+        .stock-item { border-bottom: 1px solid #f1f5f9; padding: 1rem; }
+        .stock-item:last-child { border-bottom: none; }
+        
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .activity-item:last-child { border-bottom: none; }
+        
+        .message-item {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+            background: white;
+        }
+        
+        .message-item:hover { 
+            background: #f8fafc; 
+            transform: translateX(4px);
+        }
+        
+        .message-item.unread { 
+            background: #eff6ff; 
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .message-item.read {
+            background: white;
+            border-left: 4px solid transparent;
+            opacity: 0.9;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .message-sender {
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        
+        .message-content {
+            color: #374151;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+        
+        .message-to {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed #e2e8f0;
+        }
+        
+        .unread-badge {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        
+        .personnel-item { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
+        .personnel-item:last-child { border-bottom: none; }
+        
+        .record-item { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
+        .record-item:last-child { border-bottom: none; }
+        
+        .setting-item { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; }
+        .setting-item:last-child { border-bottom: none; }
+        
+        .login-container {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 420px;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -0.25rem;
+            right: -0.25rem;
+            background: #ef4444;
+            color: white;
+            font-size: 0.625rem;
+            min-width: 1rem;
+            height: 1rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 0.25rem;
+        }
+        
+        .empty-state { text-align: center; padding: 2rem; color: #9ca3af; }
+        
+        .image-preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+        .image-preview-item { position: relative; }
+        .image-preview-item img { width: 100%; height: 6rem; object-fit: cover; border-radius: 0.375rem; }
+        
+        .tab-nav { display: flex; border-bottom: 1px solid #e2e8f0; margin-bottom: 1rem; }
+        .tab-nav-item { flex: 1; padding: 0.75rem; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab-nav-item.active { border-bottom-color: #3b82f6; color: #3b82f6; font-weight: 600; }
+        
+        .record-images {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .record-image-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 0.375rem;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .record-image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .record-image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 0.75rem;
+        }
+        
+        .image-viewer-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .image-viewer-modal.show { display: flex; }
+        
+        .image-viewer-content {
+            max-width: 90%;
+            max-height: 90%;
+        }
+        
+        .image-viewer-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+        
+        .message-detail-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 60;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .message-detail-modal.show { display: flex; }
+        
+        .message-detail-content {
+            background: white;
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        
+        .loading-overlay.show { display: flex; }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载动画 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p class="mt-4 text-gray-600">加载中...</p>
+    </div>
+
+    <!-- 登录页面 -->
+    <div id="loginPage" class="page active" style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #1e40af 100%);">
+        <div class="login-container">
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="fa fa-cubes text-4xl text-white"></i>
+                </div>
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-500 to-blue-700 bg-clip-text text-transparent">标准物质管理助手</h1>
+                <p class="text-gray-500 mt-1">Supabase云端版 v2.0.0</p>
+            </div>
+            
+            <div id="loginError" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg mb-4 text-sm"></div>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                    <div class="relative">
+                        <input type="email" id="loginEmail" class="form-input pl-10" placeholder="请输入邮箱" required>
+                        <i class="fa fa-envelope absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <div class="relative">
+                        <input type="password" id="loginPassword" class="form-input pl-10 pr-10" placeholder="请输入密码" required>
+                        <i class="fa fa-lock absolute left-3 top-3 text-gray-400"></i>
+                        <button type="button" onclick="togglePassword()" class="absolute right-3 top-3 text-gray-400">
+                            <i class="fa fa-eye" id="passwordToggleIcon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="rememberMe" class="w-4 h-4 text-primary rounded">
+                        <span class="ml-2 text-sm text-gray-600">记住我</span>
+                    </label>
+                </div>
+                
+                <button type="submit" class="w-full btn btn-primary py-3 text-base">
+                    <i class="fa fa-sign-in mr-2"></i>登录
+                </button>
+            </form>
+            
+            <button onclick="showRegisterModal()" class="w-full mt-6 btn btn-secondary">
+                <i class="fa fa-user-plus mr-2"></i>注册新账户
+            </button>
+        </div>
+    </div>
+
+    <!-- 注册模态框 -->
+    <div id="registerModal" class="modal" onclick="closeModalOnBg(event, 'registerModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">注册新账户</h2>
+                <button onclick="closeRegisterModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="registerForm" onsubmit="handleRegister(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">姓名 <span class="text-red-500">*</span></label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">邮箱 <span class="text-red-500">*</span></label>
+                            <input type="email" name="email" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="password" class="form-input" required minlength="6">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+                            <select name="role" class="form-input">
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeRegisterModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">注册</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用容器 -->
+    <div id="appContainer" style="display: none;">
+        <!-- 头部 -->
+        <div class="header flex items-center justify-between">
+            <h1 id="pageTitle" class="text-xl font-bold flex items-center">
+                <i class="fa fa-cubes mr-2"></i>
+                <span>标准物质管理</span>
+            </h1>
+            <div class="flex items-center space-x-4">
+                <button onclick="openNotificationModal()" class="relative p-2">
+                    <i class="fa fa-bell-o text-xl"></i>
+                    <span id="notificationCount" class="notification-badge hidden">0</span>
+                </button>
+                <button onclick="showScanModal()" class="p-2">
+                    <i class="fa fa-qrcode text-xl"></i>
+                </button>
+                <button onclick="logout()" class="flex items-center p-2">
+                    <i class="fa fa-user-circle text-xl mr-1"></i>
+                    <span id="currentUserName" class="text-sm">管理员</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 内容区域 -->
+        <div class="content">
+            <!-- 首页 -->
+            <div id="dashboardPage" class="page active">
+                <!-- 统计卡片 -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="stat-card">
+                        <div>
+                            <p class="text-sm text-gray-500">总库存</p>
+                            <p id="totalStock" class="text-3xl font-bold text-primary">0</p>
+                        </div>
+                        <div class="stat-icon bg-blue-100">
+                            <i class="fa fa-cubes text-primary"></i>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div>
+                            <p class="text-sm text-gray-500">近效期预警</p>
+                            <p id="expiryWarning" class="text-3xl font-bold text-warning">0</p>
+                        </div>
+                        <div class="stat-icon bg-yellow-100">
+                            <i class="fa fa-exclamation-triangle text-warning"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 库存状态图表 -->
+                <div class="card">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-pie-chart text-primary mr-2"></i>
+                        库存状态分布
+                    </h2>
+                    <div class="h-56">
+                        <canvas id="stockStatusChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 快速操作 -->
+                <div class="card">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-bolt text-warning mr-2"></i>
+                        快速操作
+                    </h2>
+                    <div class="grid grid-cols-2 gap-6">
+                        <div class="quick-action-btn py-6" onclick="showAddStockModal()">
+                            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                                <i class="fa fa-archive text-primary text-2xl"></i>
+                            </div>
+                            <span class="text-sm font-medium text-gray-700">入库登记</span>
+                            <span class="text-xs text-gray-400 mt-1">新增标准物质</span>
+                        </div>
+                        <div class="quick-action-btn py-6" onclick="showScanModal()">
+                            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                                <i class="fa fa-qrcode text-success text-2xl"></i>
+                            </div>
+                            <span class="text-sm font-medium text-gray-700">扫码查询</span>
+                            <span class="text-xs text-gray-400 mt-1">扫描/查询出库</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 最近活动 -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa fa-clock-o text-info mr-2"></i>
+                            最近活动
+                        </h2>
+                        <button onclick="switchPage('records')" class="text-primary text-sm hover:underline">查看全部</button>
+                    </div>
+                    <div id="recentActivities">
+                        <div class="empty-state">
+                            <i class="fa fa-inbox text-4xl mb-2"></i>
+                            <p>暂无活动记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 库存页面 -->
+            <div id="stockPage" class="page">
+                <div class="card mb-4">
+                    <div class="relative">
+                        <input type="text" id="stockSearchInput" placeholder="搜索标准物质..." class="form-input pl-10" oninput="renderStockList()">
+                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div class="tab-nav">
+                    <div class="tab-nav-item active" onclick="switchStockTab('all', this)">全部</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('normal', this)">正常</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('warning', this)">即将过期</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('expired', this)">已过期</div>
+                    <div class="tab-nav-item" onclick="switchStockTab('low', this)">库存不足</div>
+                </div>
+
+                <div id="stockList">
+                    <div class="empty-state">
+                        <i class="fa fa-inbox text-4xl mb-2"></i>
+                        <p>暂无库存数据</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 人员页面 -->
+            <div id="personnelPage" class="page">
+                <div class="card mb-4">
+                    <div class="relative">
+                        <input type="text" id="personnelSearchInput" placeholder="搜索人员..." class="form-input pl-10" oninput="renderPersonnelList()">
+                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">人员列表</h2>
+                    <button onclick="showAddPersonnelModal()" class="btn btn-primary">
+                        <i class="fa fa-plus mr-1"></i>添加
+                    </button>
+                </div>
+
+                <div id="personnelList" class="card">
+                    <div class="empty-state">
+                        <i class="fa fa-users text-4xl mb-2"></i>
+                        <p>暂无人员数据</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 记录页面 -->
+            <div id="recordsPage" class="page">
+                <div class="card mb-4">
+                    <div class="relative">
+                        <input type="text" id="recordsSearchInput" placeholder="搜索记录..." class="form-input pl-10" oninput="renderRecordsList()">
+                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div id="recordsList" class="card">
+                    <div class="empty-state">
+                        <i class="fa fa-history text-4xl mb-2"></i>
+                        <p>暂无操作记录</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置页面 -->
+            <div id="settingsPage" class="page">
+                <div class="card mb-4">
+                    <div class="flex items-center">
+                        <div class="w-16 h-16 bg-primary text-white rounded-full flex items-center justify-center text-2xl font-bold mr-4">
+                            <span id="settingUserInitial">管</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold" id="settingUserName">管理员</h2>
+                            <p class="text-sm text-gray-500" id="settingUserRole">系统管理员</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="setting-item" onclick="showChangePasswordModal()">
+                        <div class="flex items-center">
+                            <i class="fa fa-lock text-primary mr-3"></i>
+                            <span>修改密码</span>
+                        </div>
+                        <i class="fa fa-chevron-right text-gray-400"></i>
+                    </div>
+                    <div class="setting-item" onclick="exportData()">
+                        <div class="flex items-center">
+                            <i class="fa fa-download text-success mr-3"></i>
+                            <span>数据导出(Excel)</span>
+                        </div>
+                        <i class="fa fa-chevron-right text-gray-400"></i>
+                    </div>
+                    <div class="setting-item" onclick="importData()">
+                        <div class="flex items-center">
+                            <i class="fa fa-upload text-primary mr-3"></i>
+                            <span>数据导入(Excel)</span>
+                        </div>
+                        <i class="fa fa-chevron-right text-gray-400"></i>
+                    </div>
+                    <div class="setting-item" onclick="toggleOfflineMode()">
+                        <div class="flex items-center">
+                            <i class="fa fa-wifi text-warning mr-3"></i>
+                            <span>切换离线模式</span>
+                        </div>
+                        <span id="offlineStatus" class="text-sm text-gray-500">当前: 在线</span>
+                    </div>
+                    <div class="setting-item" onclick="clearAllData()">
+                        <div class="flex items-center">
+                            <i class="fa fa-trash text-danger mr-3"></i>
+                            <span>清空数据</span>
+                        </div>
+                        <i class="fa fa-chevron-right text-gray-400"></i>
+                    </div>
+                    <div class="setting-item">
+                        <div class="flex items-center">
+                            <i class="fa fa-info-circle text-info mr-3"></i>
+                            <span>关于系统</span>
+                        </div>
+                        <div>
+                            <span class="text-sm text-gray-500">v2.0.0 Supabase版</span>
+                            <i class="fa fa-chevron-right text-gray-400 ml-2"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="logout()" class="w-full bg-white text-danger font-semibold py-3 rounded-lg mt-6 border border-gray-200">
+                    <i class="fa fa-sign-out mr-2"></i>退出登录
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部导航 -->
+        <div class="footer">
+            <div class="flex justify-around">
+                <div class="nav-item active" onclick="switchPage('dashboard')">
+                    <i class="fa fa-home"></i>
+                    <span>首页</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('stock')">
+                    <i class="fa fa-cubes"></i>
+                    <span>库存</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('personnel')">
+                    <i class="fa fa-users"></i>
+                    <span>人员</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('settings')">
+                    <i class="fa fa-cog"></i>
+                    <span>设置</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框 -->
+    <!-- 简化的消息中心 -->
+    <div id="notificationModal" class="modal" onclick="closeModalOnBg(event, 'notificationModal')">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">消息中心</h2>
+                <button onclick="closeNotificationModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- 发送消息区域 -->
+            <div class="p-3 bg-gray-50 border-b border-gray-200">
+                <form id="composeForm" onsubmit="sendSimpleMessage(event)">
+                    <div class="flex gap-2">
+                        <select id="messageRecipient" class="form-input text-sm" style="width: 100px;" required>
+                            <option value="">发给...</option>
+                            <option value="all">所有人</option>
+                        </select>
+                        <input type="text" id="messageContent" class="form-input text-sm flex-1" placeholder="输入消息..." required>
+                        <button type="submit" class="btn btn-primary text-sm px-3">
+                            <i class="fa fa-send"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- 消息列表 -->
+            <div id="messagesContent" class="p-3 max-h-80 overflow-y-auto">
+                <div class="empty-state py-8">
+                    <i class="fa fa-comments text-4xl mb-2 text-gray-300"></i>
+                    <p class="text-gray-400">暂无消息</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scanModal" class="modal" onclick="closeModalOnBg(event, 'scanModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">扫码查询</h2>
+                <button onclick="closeScanModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <!-- 摄像头扫描区域 -->
+                <div id="cameraScanArea" class="mb-4">
+                    <div class="relative bg-black rounded-lg overflow-hidden" style="height: 250px;">
+                        <video id="scanVideo" class="w-full h-full object-cover" playsinline></video>
+                        <canvas id="scanCanvas" class="hidden"></canvas>
+                        <div id="scanOverlay" class="absolute inset-0 flex items-center justify-center">
+                            <div class="border-2 border-white/50 rounded-lg w-48 h-48 relative">
+                                <div class="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-primary -mt-1 -ml-1"></div>
+                                <div class="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-primary -mt-1 -mr-1"></div>
+                                <div class="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-primary -mb-1 -ml-1"></div>
+                                <div class="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-primary -mb-1 -mr-1"></div>
+                                <div class="absolute top-1/2 left-0 right-0 h-0.5 bg-primary/50 animate-pulse"></div>
+                            </div>
+                        </div>
+                        <div id="scanLoading" class="absolute inset-0 bg-black/80 flex items-center justify-center hidden">
+                            <div class="text-white text-center">
+                                <i class="fa fa-spinner fa-spin text-3xl mb-2"></i>
+                                <p>正在启动摄像头...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="startCameraScan()" class="btn btn-primary flex-1">
+                            <i class="fa fa-camera mr-1"></i>开始扫描
+                        </button>
+                        <button onclick="stopCameraScan()" class="btn btn-secondary flex-1">
+                            <i class="fa fa-stop mr-1"></i>停止
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2 text-center">将二维码对准扫描框即可自动识别</p>
+                </div>
+                
+                <!-- 手动输入区域 -->
+                <div class="border-t border-gray-200 pt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">或手动输入唯一标识</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="scanInput" class="form-input flex-1" placeholder="请输入唯一标识码" autofocus>
+                        <button onclick="handleScan()" class="btn btn-primary">
+                            <i class="fa fa-search mr-1"></i>查询
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="scanResult" class="hidden mt-4">
+                    <!-- 扫描结果将显示在这里 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 二维码显示弹窗 -->
+    <div id="qrCodeModal" class="modal" onclick="closeModalOnBg(event, 'qrCodeModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">物品二维码</h2>
+                <button onclick="closeQRCodeModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4 text-center">
+                <div id="qrCodeContainer" class="mb-4 flex justify-center">
+                    <!-- 二维码将显示在这里 -->
+                </div>
+                <div class="text-left bg-gray-50 p-3 rounded-lg mb-4">
+                    <p class="text-sm"><span class="text-gray-500">名称：</span><span id="qrItemName" class="font-medium"></span></p>
+                    <p class="text-sm"><span class="text-gray-500">唯一标识：</span><span id="qrItemUniqueId" class="font-medium"></span></p>
+                </div>
+                <p class="text-xs text-gray-400">使用扫码功能扫描此二维码可快速出库</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="addStockModal" class="modal" onclick="closeModalOnBg(event, 'addStockModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">入库登记</h2>
+                <button onclick="closeAddStockModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="addStockForm" onsubmit="handleStockIn(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">标准物质名称 <span class="text-red-500">*</span></label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">标准物质编号 <span class="text-red-500">*</span></label>
+                            <input type="text" name="code" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">批次号</label>
+                            <input type="text" name="batchNumber" class="form-input">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">唯一性标识方式</label>
+                            <div class="flex space-x-4 mb-2">
+                                <label class="flex items-center">
+                                    <input type="radio" name="uniqueIdType" value="auto" checked class="mr-2" onchange="toggleUniqueIdInput()">
+                                    <span>自动生成</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="uniqueIdType" value="manual" class="mr-2" onchange="toggleUniqueIdInput()">
+                                    <span>手动输入</span>
+                                </label>
+                            </div>
+                            <input type="text" name="uniqueId" id="manualUniqueId" class="form-input hidden" placeholder="请输入唯一性标识">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">浓度</label>
+                                <input type="text" name="concentration" class="form-input" placeholder="如：100μg/mL">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">不确定度</label>
+                                <input type="text" name="uncertainty" class="form-input" placeholder="如：0.5%">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">生产厂家</label>
+                            <input type="text" name="manufacturer" class="form-input">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">稀释条件</label>
+                            <input type="text" name="storageCondition" class="form-input" placeholder="如：使用前用纯水稀释">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">数量 <span class="text-red-500">*</span></label>
+                                <input type="number" name="quantity" class="form-input" min="1" value="1" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">有效期 <span class="text-red-500">*</span></label>
+                                <input type="date" name="expiryDate" class="form-input" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">图片上传</label>
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary" onclick="document.getElementById('stockImages').click()">
+                                <input type="file" id="stockImages" multiple accept="image/*" class="hidden" onchange="previewImages(this, 'stockImagePreview')">
+                                <div id="stockImagePreview" class="image-preview-grid mb-2 hidden"></div>
+                                <div id="stockUploadPlaceholder">
+                                    <i class="fa fa-camera text-3xl text-gray-400 mb-2"></i>
+                                    <p class="text-gray-500 text-sm">点击上传图片（最多3张）</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeAddStockModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="outStockModal" class="modal" onclick="closeModalOnBg(event, 'outStockModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">出库登记</h2>
+                <button onclick="closeOutStockModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="outStockForm" onsubmit="handleStockOut(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">选择标准物质 <span class="text-red-500">*</span></label>
+                            <select name="stockId" id="outStockSelect" class="form-input" required>
+                                <option value="">请选择</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">出库用途</label>
+                            <input type="text" name="purpose" class="form-input" placeholder="请输入出库用途">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">图片上传</label>
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary" onclick="document.getElementById('outStockImages').click()">
+                                <input type="file" id="outStockImages" multiple accept="image/*" class="hidden" onchange="previewImages(this, 'outStockImagePreview')">
+                                <div id="outStockImagePreview" class="image-preview-grid mb-2 hidden"></div>
+                                <div id="outStockUploadPlaceholder">
+                                    <i class="fa fa-camera text-3xl text-gray-400 mb-2"></i>
+                                    <p class="text-gray-500 text-sm">点击上传图片（最多3张）</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeOutStockModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-warning">确认出库</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="addPersonnelModal" class="modal" onclick="closeModalOnBg(event, 'addPersonnelModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">添加人员</h2>
+                <button onclick="closeAddPersonnelModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="addPersonnelForm" onsubmit="handleAddPersonnel(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">姓名 <span class="text-red-500">*</span></label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">邮箱 <span class="text-red-500">*</span></label>
+                            <input type="email" name="email" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="password" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">角色 <span class="text-red-500">*</span></label>
+                            <select name="role" class="form-input" required>
+                                <option value="admin">管理员</option>
+                                <option value="user">普通用户</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeAddPersonnelModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="changePasswordModal" class="modal" onclick="closeModalOnBg(event, 'changePasswordModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">修改密码</h2>
+                <button onclick="closeChangePasswordModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">新密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="newPassword" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">确认新密码 <span class="text-red-500">*</span></label>
+                            <input type="password" name="confirmPassword" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeChangePasswordModal()" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewDetailModal" class="modal" onclick="closeModalOnBg(event, 'viewDetailModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold">标准物质详情</h2>
+                <button onclick="closeViewDetailModal()" class="text-white hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="viewDetailContent" class="p-4"></div>
+        </div>
+    </div>
+
+    <div id="imageViewerModal" class="image-viewer-modal" onclick="closeImageViewer()">
+        <div class="image-viewer-content text-center">
+            <button onclick="closeImageViewer()" class="absolute top-4 right-4 text-white text-2xl">
+                <i class="fa fa-times"></i>
+            </button>
+            <img id="viewerImage" src="" alt="查看图片">
+            <p id="viewerCaption" class="text-white mt-4"></p>
+        </div>
+    </div>
+
+    <script>
+        // ==================== Supabase配置 ====================
+        const SUPABASE_URL = 'https://jszkdnxyevzrdpvmninj.supabase.co'
+        const SUPABASE_ANON_KEY = 'sb_publishable_EzQ8EDei_2cG4lZVRQEmag_sQomqBU-'
+        
+        // 初始化Supabase客户端
+        let supabaseClient = null
+        let currentUser = null
+        let isOfflineMode = false
+        
+        // ==================== 离线模式存储 ====================
+        const LocalStorage = {
+            get(key) {
+                const data = localStorage.getItem('srm_' + key)
+                return data ? JSON.parse(data) : null
+            },
+            set(key, value) {
+                localStorage.setItem('srm_' + key, JSON.stringify(value))
+            },
+            remove(key) {
+                localStorage.removeItem('srm_' + key)
+            }
+        }
+
+        // ==================== 初始化 ====================
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 检查离线模式设置
+            isOfflineMode = LocalStorage.get('offlineMode') || false
+            
+            // 更新离线模式状态显示（如果存在）
+            const offlineStatus = document.getElementById('offlineStatus')
+            if (offlineStatus) {
+                offlineStatus.textContent = isOfflineMode ? '当前: 离线' : '当前: 在线'
+            }
+            
+            if (!isOfflineMode) {
+                // 初始化Supabase
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: {
+                        autoRefreshToken: true,
+                        persistSession: true,
+                        detectSessionInUrl: false
+                    }
+                })
+                
+                // 检查登录状态
+                const { data: { session } } = await supabaseClient.auth.getSession()
+                if (session) {
+                    await loadUserProfile(session.user)
+                    showApp()
+                }
+            } else {
+                // 离线模式：检查本地登录
+                const offlineUser = LocalStorage.get('currentUser')
+                if (offlineUser) {
+                    currentUser = offlineUser
+                    showApp()
+                }
+            }
+        })
+
+        // ==================== 认证功能 ====================
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault()
+            showLoading(true)
+            
+            const email = document.getElementById('loginEmail').value
+            const password = document.getElementById('loginPassword').value
+            
+            try {
+                if (isOfflineMode) {
+                    // 离线模式验证
+                    const personnel = LocalStorage.get('personnel') || []
+                    const user = personnel.find(p => p.username === email && p.password === password)
+                    if (user) {
+                        currentUser = user
+                        LocalStorage.set('currentUser', user)
+                        showApp()
+                    } else {
+                        throw new Error('用户名或密码错误')
+                    }
+                } else {
+                    // 在线模式使用Supabase Auth
+                    const { data, error } = await supabaseClient.auth.signInWithPassword({
+                        email,
+                        password
+                    })
+                    
+                    if (error) throw error
+                    
+                    await loadUserProfile(data.user)
+                    showApp()
+                }
+            } catch (error) {
+                showLoginError(error.message)
+            } finally {
+                showLoading(false)
+            }
+        })
+
+        async function loadUserProfile(user) {
+            if (isOfflineMode) return
+            
+            try {
+                const { data: profile, error } = await supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single()
+                
+                if (error) {
+                    console.warn('获取用户资料失败:', error)
+                    // 如果没有profile，使用基本用户信息
+                    currentUser = {
+                        id: user.id,
+                        email: user.email,
+                        name: user.user_metadata?.name || user.email,
+                        role: 'user'
+                    }
+                } else {
+                    currentUser = {
+                        id: user.id,
+                        email: user.email,
+                        ...profile
+                    }
+                }
+            } catch (error) {
+                console.error('加载用户资料失败:', error)
+                // 使用基本用户信息
+                currentUser = {
+                    id: user.id,
+                    email: user.email,
+                    name: user.user_metadata?.name || user.email,
+                    role: 'user'
+                }
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault()
+            showLoading(true)
+            
+            const formData = new FormData(e.target)
+            const userData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                password: formData.get('password'),
+                role: formData.get('role')
+            }
+            
+            try {
+                if (isOfflineMode) {
+                    // 离线模式注册
+                    const personnel = LocalStorage.get('personnel') || []
+                    if (personnel.some(p => p.username === userData.email)) {
+                        throw new Error('邮箱已存在')
+                    }
+                    
+                    const newUser = {
+                        id: Date.now().toString(),
+                        name: userData.name,
+                        username: userData.email,
+                        password: userData.password,
+                        role: userData.role
+                    }
+                    
+                    personnel.push(newUser)
+                    LocalStorage.set('personnel', personnel)
+                    
+                    alert('注册成功！请登录')
+                    closeRegisterModal()
+                } else {
+                    // 在线模式使用Supabase Auth
+                    const { data, error } = await supabaseClient.auth.signUp({
+                        email: userData.email,
+                        password: userData.password,
+                        options: {
+                            data: {
+                                name: userData.name,
+                                role: userData.role
+                            }
+                        }
+                    })
+                    
+                    if (error) throw error
+                    
+                    alert('注册成功！请检查邮箱验证邮件')
+                    closeRegisterModal()
+                }
+            } catch (error) {
+                alert('注册失败: ' + error.message)
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('loginPassword')
+            const icon = document.getElementById('passwordToggleIcon')
+            if (input.type === 'password') {
+                input.type = 'text'
+                icon.className = 'fa fa-eye-slash'
+            } else {
+                input.type = 'password'
+                icon.className = 'fa fa-eye'
+            }
+        }
+
+        function showLoginError(msg) {
+            const error = document.getElementById('loginError')
+            error.textContent = msg
+            error.classList.remove('hidden')
+            setTimeout(() => error.classList.add('hidden'), 3000)
+        }
+
+        async function logout() {
+            if (!confirm('确定要退出登录吗？')) return
+            
+            if (!isOfflineMode && supabaseClient) {
+                await supabaseClient.auth.signOut()
+            }
+            
+            currentUser = null
+            LocalStorage.remove('currentUser')
+            document.getElementById('appContainer').style.display = 'none'
+            document.getElementById('loginPage').style.display = 'flex'
+            document.getElementById('loginPage').classList.add('active')
+            document.getElementById('loginForm').reset()
+        }
+
+        // ==================== 页面切换 ====================
+        function showApp() {
+            document.getElementById('loginPage').classList.remove('active')
+            document.getElementById('loginPage').style.display = 'none'
+            document.getElementById('appContainer').style.display = 'block'
+            
+            // 更新用户信息
+            document.getElementById('currentUserName').textContent = currentUser?.name || '用户'
+            document.getElementById('settingUserName').textContent = currentUser?.name || '用户'
+            document.getElementById('settingUserRole').textContent = currentUser?.role === 'admin' ? '系统管理员' : '普通用户'
+            document.getElementById('settingUserInitial').textContent = (currentUser?.name || '用').charAt(0)
+            
+            // 初始化图表
+            initChart()
+            
+            // 刷新数据
+            refreshAllData()
+            
+            // 设置实时订阅
+            if (!isOfflineMode && supabaseClient) {
+                setupRealtimeSubscriptions()
+            }
+        }
+
+        function switchPage(page) {
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active')
+                p.style.display = 'none'
+            })
+            
+            const targetPage = document.getElementById(page + 'Page')
+            if (targetPage) {
+                targetPage.classList.add('active')
+                targetPage.style.display = 'block'
+            }
+            
+            document.querySelectorAll('.nav-item').forEach((item, index) => {
+                item.classList.remove('active')
+                const pages = ['dashboard', 'stock', 'personnel', 'settings']
+                if (pages[index] === page) {
+                    item.classList.add('active')
+                }
+            })
+            
+            const titles = {
+                dashboard: '标准物质管理',
+                stock: '库存管理',
+                personnel: '人员管理',
+                records: '操作记录',
+                settings: '系统设置'
+            }
+            document.querySelector('#pageTitle span').textContent = titles[page] || '标准物质管理'
+            
+            if (page === 'dashboard') refreshDashboard()
+            if (page === 'stock') renderStockList()
+            if (page === 'personnel') renderPersonnelList()
+            if (page === 'records') renderRecordsList()
+        }
+
+        // ==================== 图表功能 ====================
+        let stockStatusChart = null
+        
+        function initChart() {
+            const ctx = document.getElementById('stockStatusChart').getContext('2d')
+            stockStatusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['正常', '即将过期', '已过期', '库存不足'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#22c55e', '#f59e0b', '#ef4444', '#3b82f6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 15, usePointStyle: true }
+                        }
+                    }
+                }
+            })
+        }
+
+        // ==================== 数据操作 ====================
+        async function refreshAllData() {
+            await refreshDashboard()
+            await renderStockList()
+            await renderPersonnelList()
+            await renderRecordsList()
+            await updateNotificationBadge()
+        }
+
+        async function refreshDashboard() {
+            let stock = []
+            let records = []
+            
+            if (isOfflineMode) {
+                stock = LocalStorage.get('stock') || []
+                records = LocalStorage.get('records') || []
+            } else {
+                // 从Supabase获取
+                const { data: stockData } = await supabaseClient
+                    .from('stock_items')
+                    .select('*')
+                stock = stockData || []
+                
+                const { data: recordsData } = await supabaseClient
+                    .from('operation_records')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(5)
+                records = recordsData || []
+            }
+            
+            // 计算统计数据
+            const totalStock = stock.reduce((sum, item) => sum + (item.quantity || 0), 0)
+            document.getElementById('totalStock').textContent = totalStock
+            
+            const today = new Date()
+            const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+            const expiryWarning = stock.filter(item => {
+                const expiryDate = new Date(item.expiry_date || item.expiryDate)
+                return expiryDate <= thirtyDaysLater && expiryDate >= today
+            }).length
+            document.getElementById('expiryWarning').textContent = expiryWarning
+            
+            // 计算状态分布
+            let normal = 0, warning = 0, expired = 0, low = 0
+            stock.forEach(item => {
+                const expiryDate = new Date(item.expiry_date || item.expiryDate)
+                if (item.quantity <= 0) {
+                    low++
+                } else if (expiryDate < today) {
+                    expired++
+                } else if (expiryDate <= thirtyDaysLater) {
+                    warning++
+                } else {
+                    normal++
+                }
+            })
+            
+            if (stockStatusChart) {
+                stockStatusChart.data.datasets[0].data = [normal, warning, expired, low]
+                stockStatusChart.update()
+            }
+            
+            // 加载最近活动
+            const recentActivities = document.getElementById('recentActivities')
+            if (records.length === 0) {
+                recentActivities.innerHTML = '<div class="empty-state"><i class="fa fa-inbox text-4xl mb-2"></i><p>暂无活动记录</p></div>'
+            } else {
+                recentActivities.innerHTML = records.map(record => {
+                    const icons = { in: 'fa-archive text-primary', out: 'fa-sign-out text-success', warning: 'fa-exclamation-triangle text-warning' }
+                    const actions = { in: '入库', out: '出库', warning: '预警' }
+                    return `
+                        <div class="activity-item">
+                            <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-3">
+                                <i class="fa ${icons[record.type] || 'fa-info-circle'}"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium">${record.material_name || record.materialName} ${actions[record.type]}</p>
+                                <p class="text-xs text-gray-500">${record.operator_name || record.operator} · ${new Date(record.created_at || record.date).toLocaleString('zh-CN')}</p>
+                            </div>
+                        </div>
+                    `
+                }).join('')
+            }
+        }
+
+        // ==================== 库存管理 ====================
+        let currentStockTab = 'all'
+        
+        async function renderStockList() {
+            let stock = []
+            
+            if (isOfflineMode) {
+                stock = LocalStorage.get('stock') || []
+            } else {
+                const { data } = await supabaseClient
+                    .from('stock_items')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                stock = data || []
+            }
+            
+            const search = document.getElementById('stockSearchInput')?.value?.toLowerCase() || ''
+            
+            let filtered = stock
+            if (search) {
+                filtered = filtered.filter(item => 
+                    (item.name || '').toLowerCase().includes(search) || 
+                    (item.code || '').toLowerCase().includes(search)
+                )
+            }
+            
+            if (currentStockTab !== 'all') {
+                filtered = filtered.filter(item => item.status === currentStockTab)
+            }
+            
+            // 按名称分组
+            const grouped = {}
+            filtered.forEach(item => {
+                if (!grouped[item.name]) {
+                    grouped[item.name] = { items: [], total: 0 }
+                }
+                grouped[item.name].items.push(item)
+                grouped[item.name].total += item.quantity
+            })
+            
+            const container = document.getElementById('stockList')
+            if (Object.keys(grouped).length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox text-4xl mb-2"></i><p>暂无库存数据</p></div>'
+                return
+            }
+            
+            container.innerHTML = Object.entries(grouped).map(([name, group]) => {
+                const statusCounts = { normal: 0, warning: 0, expired: 0, low: 0 }
+                group.items.forEach(item => {
+                    statusCounts[item.status] = (statusCounts[item.status] || 0) + item.quantity
+                })
+                
+                let statusLabels = ''
+                if (statusCounts.normal > 0) statusLabels += `<span class="ml-2 status-badge status-normal">正常:${statusCounts.normal}</span>`
+                if (statusCounts.warning > 0) statusLabels += `<span class="ml-2 status-badge status-warning">即将:${statusCounts.warning}</span>`
+                if (statusCounts.expired > 0) statusLabels += `<span class="ml-2 status-badge status-danger">过期:${statusCounts.expired}</span>`
+                
+                const groupId = 'group-' + name.replace(/\s+/g, '-')
+                
+                return `
+                    <div class="stock-group">
+                        <div class="stock-group-header flex justify-between items-center" onclick="toggleGroup('${groupId}')">
+                            <div class="flex items-center">
+                                <i class="fa fa-chevron-down mr-2 text-gray-400 transition-transform" id="arrow-${groupId}"></i>
+                                <h3 class="font-semibold">${name}${statusLabels}</h3>
+                            </div>
+                            <span class="text-lg font-bold">${group.total}</span>
+                        </div>
+                        <div id="${groupId}" class="hidden">
+                            ${group.items.map(item => `
+                                <div class="stock-item">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <p class="text-sm font-medium">唯一性标识: ${item.unique_id || item.uniqueId}</p>
+                                            <p class="text-xs text-gray-500">有效期: ${item.expiry_date || item.expiryDate} | 浓度: ${item.concentration || 'N/A'}</p>
+                                            <span class="status-badge status-${item.status} mt-1">
+                                                ${item.status === 'normal' ? '正常' : item.status === 'warning' ? '即将过期' : item.status === 'expired' ? '已过期' : '库存不足'}
+                                            </span>
+                                        </div>
+                                        <div class="flex space-x-1">
+                                            <button onclick="showQRCode('${item.id}', '${item.unique_id || item.uniqueId}', '${item.name}')" class="px-2 py-1 bg-purple-500 text-white text-xs rounded" title="显示二维码">
+                                                <i class="fa fa-qrcode"></i>
+                                            </button>
+                                            <button onclick="viewStockDetail('${item.id}')" class="px-2 py-1 bg-info text-white text-xs rounded">查看</button>
+                                            <button onclick="quickOut('${item.id}')" class="px-2 py-1 bg-warning text-white text-xs rounded">出库</button>
+                                            ${currentUser?.role === 'admin' ? `<button onclick="deleteStock('${item.id}')" class="px-2 py-1 bg-danger text-white text-xs rounded">删除</button>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `
+            }).join('')
+        }
+
+        function switchStockTab(tab, element) {
+            currentStockTab = tab
+            document.querySelectorAll('.tab-nav-item').forEach(el => el.classList.remove('active'))
+            element.classList.add('active')
+            renderStockList()
+        }
+
+        function toggleGroup(id) {
+            const el = document.getElementById(id)
+            const arrow = document.getElementById('arrow-' + id)
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden')
+                arrow.style.transform = 'rotate(180deg)'
+            } else {
+                el.classList.add('hidden')
+                arrow.style.transform = 'rotate(0)'
+            }
+        }
+
+        // ==================== 入库功能 ====================
+        function showAddStockModal() {
+            document.getElementById('addStockModal').classList.add('show')
+            const date = new Date()
+            date.setDate(date.getDate() + 30)
+            document.querySelector('input[name="expiryDate"]').value = date.toISOString().split('T')[0]
+        }
+
+        function closeAddStockModal() {
+            document.getElementById('addStockModal').classList.remove('show')
+            document.getElementById('addStockForm').reset()
+            document.getElementById('stockImagePreview').innerHTML = ''
+            document.getElementById('stockImagePreview').classList.add('hidden')
+            document.getElementById('stockUploadPlaceholder').classList.remove('hidden')
+        }
+
+        function toggleUniqueIdInput() {
+            const type = document.querySelector('input[name="uniqueIdType"]:checked').value
+            const input = document.getElementById('manualUniqueId')
+            if (type === 'manual') {
+                input.classList.remove('hidden')
+                input.required = true
+            } else {
+                input.classList.add('hidden')
+                input.required = false
+            }
+        }
+
+        // 将文件转换为Base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => resolve(reader.result)
+                reader.onerror = reject
+                reader.readAsDataURL(file)
+            })
+        }
+
+        async function handleStockIn(e) {
+            e.preventDefault()
+            showLoading(true)
+            
+            const formData = new FormData(e.target)
+            const quantity = parseInt(formData.get('quantity')) || 1
+            const baseTime = Date.now()
+            
+            try {
+                // 处理图片上传
+                const imageFiles = document.getElementById('stockImages').files
+                const imageUrls = []
+                
+                if (imageFiles.length > 0) {
+                    for (let i = 0; i < imageFiles.length && i < 3; i++) {
+                        const file = imageFiles[i]
+                        
+                        if (isOfflineMode) {
+                            // 离线模式：转换为Base64存储
+                            const base64 = await fileToBase64(file)
+                            imageUrls.push(base64)
+                        } else {
+                            // 在线模式：上传到Supabase Storage
+                            try {
+                                const fileName = `stock/${Date.now()}_${i}_${file.name}`
+                                const { data, error } = await supabaseClient.storage
+                                    .from('stock-images')
+                                    .upload(fileName, file)
+                                
+                                if (error) {
+                                    console.warn('Storage上传失败，使用Base64:', error)
+                                    // 如果存储桶不存在，使用Base64作为备选
+                                    const base64 = await fileToBase64(file)
+                                    imageUrls.push(base64)
+                                } else {
+                                    const { data: { publicUrl } } = supabaseClient.storage
+                                        .from('stock-images')
+                                        .getPublicUrl(fileName)
+                                    imageUrls.push(publicUrl)
+                                }
+                            } catch (storageError) {
+                                console.warn('Storage不可用，使用Base64:', storageError)
+                                const base64 = await fileToBase64(file)
+                                imageUrls.push(base64)
+                            }
+                        }
+                    }
+                }
+                
+                // 创建库存记录
+                const records = []
+                for (let i = 0; i < quantity; i++) {
+                    const uniqueId = formData.get('uniqueIdType') === 'manual' 
+                        ? `${formData.get('uniqueId')}-${String(i + 1).padStart(2, '0')}`
+                        : `${formData.get('batchNumber') || 'BATCH'}-${baseTime.toString().slice(-4)}-${String(i + 1).padStart(2, '0')}`
+                    
+                    const stockItem = {
+                        name: formData.get('name'),
+                        code: formData.get('code'),
+                        batch_number: formData.get('batchNumber'),
+                        unique_id: uniqueId,
+                        manufacturer: formData.get('manufacturer'),
+                        concentration: formData.get('concentration'),
+                        uncertainty: formData.get('uncertainty'),
+                        storage_condition: formData.get('storageCondition'),
+                        quantity: 1,
+                        expiry_date: formData.get('expiryDate'),
+                        operator_id: currentUser?.id,
+                        images: i === 0 ? imageUrls : []
+                    }
+                    
+                    if (isOfflineMode) {
+                        stockItem.id = Date.now() + i
+                        stockItem.status = 'normal'
+                        stockItem.created_at = new Date().toISOString()
+                        const stock = LocalStorage.get('stock') || []
+                        stock.push(stockItem)
+                        LocalStorage.set('stock', stock)
+                    } else {
+                        const { data, error } = await supabaseClient
+                            .from('stock_items')
+                            .insert([stockItem])
+                            .select()
+                        if (error) throw error
+                        records.push(data[0])
+                    }
+                }
+                
+                // 添加操作记录
+                await addRecord('in', formData.get('name'), quantity, `批次号: ${formData.get('batchNumber') || 'N/A'}，入库${quantity}瓶`, imageUrls)
+                
+                closeAddStockModal()
+                await refreshAllData()
+                alert(`入库成功！已添加${quantity}瓶标准物质`)
+            } catch (error) {
+                alert('入库失败: ' + error.message)
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        // ==================== 出库功能 ====================
+        function showOutStockModal() {
+            document.getElementById('outStockModal').classList.add('show')
+            loadOutStockOptions()
+        }
+
+        function closeOutStockModal() {
+            document.getElementById('outStockModal').classList.remove('show')
+            document.getElementById('outStockForm').reset()
+        }
+
+        async function loadOutStockOptions() {
+            const select = document.getElementById('outStockSelect')
+            select.innerHTML = '<option value="">请选择</option>'
+            
+            let stock = []
+            if (isOfflineMode) {
+                stock = LocalStorage.get('stock') || []
+            } else {
+                const { data } = await supabaseClient.from('stock_items').select('*')
+                stock = data || []
+            }
+            
+            stock.forEach(item => {
+                select.innerHTML += `<option value="${item.id}">${item.name}（${item.unique_id || item.uniqueId}）</option>`
+            })
+        }
+
+        // 快速出库 - 直接出库当前物品
+        async function quickOut(id) {
+            if (!confirm('确定要出库该物品吗？')) return
+            
+            showLoading(true)
+            try {
+                let stockItem = null
+                
+                if (isOfflineMode) {
+                    const stock = LocalStorage.get('stock') || []
+                    stockItem = stock.find(s => s.id == id)
+                    if (stockItem) {
+                        const newStock = stock.filter(s => s.id != id)
+                        LocalStorage.set('stock', newStock)
+                    }
+                } else {
+                    const { data } = await supabaseClient
+                        .from('stock_items')
+                        .select('*')
+                        .eq('id', id)
+                        .single()
+                    stockItem = data
+                    
+                    if (stockItem) {
+                        await supabaseClient
+                            .from('stock_items')
+                            .delete()
+                            .eq('id', id)
+                    }
+                }
+                
+                if (!stockItem) throw new Error('库存不存在')
+                
+                // 添加出库记录
+                await addRecord('out', stockItem.name, 1, `快速出库，唯一性标识: ${stockItem.unique_id || stockItem.uniqueId}`, [])
+                
+                await refreshAllData()
+                alert('出库成功！')
+            } catch (error) {
+                alert('出库失败: ' + error.message)
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        async function handleStockOut(e) {
+            e.preventDefault()
+            showLoading(true)
+            
+            const formData = new FormData(e.target)
+            const stockId = formData.get('stockId')
+            
+            try {
+                // 获取库存信息
+                let stockItem = null
+                if (isOfflineMode) {
+                    const stock = LocalStorage.get('stock') || []
+                    stockItem = stock.find(s => s.id == stockId)
+                } else {
+                    const { data } = await supabaseClient
+                        .from('stock_items')
+                        .select('*')
+                        .eq('id', stockId)
+                        .single()
+                    stockItem = data
+                }
+                
+                if (!stockItem) throw new Error('库存不存在')
+                
+                // 处理图片
+                const imageFiles = document.getElementById('outStockImages').files
+                const imageUrls = []
+                
+                if (imageFiles.length > 0) {
+                    for (let i = 0; i < imageFiles.length && i < 3; i++) {
+                        const file = imageFiles[i]
+                        
+                        if (isOfflineMode) {
+                            // 离线模式：转换为Base64存储
+                            const base64 = await fileToBase64(file)
+                            imageUrls.push(base64)
+                        } else {
+                            // 在线模式：上传到Supabase Storage
+                            try {
+                                const fileName = `out/${Date.now()}_${i}_${file.name}`
+                                const { data, error } = await supabaseClient.storage
+                                    .from('stock-images')
+                                    .upload(fileName, file)
+                                
+                                if (error) {
+                                    console.warn('Storage上传失败，使用Base64:', error)
+                                    const base64 = await fileToBase64(file)
+                                    imageUrls.push(base64)
+                                } else {
+                                    const { data: { publicUrl } } = supabaseClient.storage
+                                        .from('stock-images')
+                                        .getPublicUrl(fileName)
+                                    imageUrls.push(publicUrl)
+                                }
+                            } catch (storageError) {
+                                console.warn('Storage不可用，使用Base64:', storageError)
+                                const base64 = await fileToBase64(file)
+                                imageUrls.push(base64)
+                            }
+                        }
+                    }
+                }
+                
+                // 删除库存
+                if (isOfflineMode) {
+                    let stock = LocalStorage.get('stock') || []
+                    stock = stock.filter(s => s.id != stockId)
+                    LocalStorage.set('stock', stock)
+                } else {
+                    const { error } = await supabaseClient
+                        .from('stock_items')
+                        .delete()
+                        .eq('id', stockId)
+                    if (error) throw error
+                }
+                
+                // 添加记录
+                await addRecord('out', stockItem.name, 1, `唯一性标识: ${stockItem.unique_id || stockItem.uniqueId}，用途: ${formData.get('purpose') || '未填写'}`, imageUrls)
+                
+                closeOutStockModal()
+                await refreshAllData()
+                alert('出库成功！')
+            } catch (error) {
+                alert('出库失败: ' + error.message)
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        async function deleteStock(id) {
+            if (!confirm('确定要删除这个标准物质吗？')) return
+            
+            try {
+                if (isOfflineMode) {
+                    let stock = LocalStorage.get('stock') || []
+                    stock = stock.filter(s => s.id != id)
+                    LocalStorage.set('stock', stock)
+                } else {
+                    const { error } = await supabaseClient
+                        .from('stock_items')
+                        .delete()
+                        .eq('id', id)
+                    if (error) throw error
+                }
+                
+                await refreshAllData()
+                alert('删除成功！')
+            } catch (error) {
+                alert('删除失败: ' + error.message)
+            }
+        }
+
+        async function viewStockDetail(id) {
+            let item = null
+            if (isOfflineMode) {
+                const stock = LocalStorage.get('stock') || []
+                item = stock.find(s => s.id == id)
+            } else {
+                const { data } = await supabaseClient
+                    .from('stock_items')
+                    .select('*')
+                    .eq('id', id)
+                    .single()
+                item = data
+            }
+            
+            if (!item) return
+            
+            const statusText = {
+                normal: '正常',
+                warning: '即将过期',
+                expired: '已过期',
+                low: '库存不足'
+            }[item.status]
+            
+            let imagesHtml = ''
+            const images = item.images || []
+            if (images.length > 0) {
+                imagesHtml = `
+                    <div class="mb-4">
+                        <h3 class="text-lg font-semibold mb-2">相关图片</h3>
+                        <div class="record-images">
+                            ${images.map((img, idx) => `
+                                <div class="record-image-item" onclick="viewImage('${img}', '入库图片 ${idx + 1}')">
+                                    <img src="${img}" alt="入库图片">
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `
+            }
+            
+            document.getElementById('viewDetailContent').innerHTML = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div><span class="text-gray-500">标准物质名称:</span> ${item.name}</div>
+                        <div><span class="text-gray-500">标准物质编号:</span> ${item.code}</div>
+                        <div><span class="text-gray-500">批次号:</span> ${item.batch_number || item.batchNumber || 'N/A'}</div>
+                        <div><span class="text-gray-500">唯一性标识:</span> ${item.unique_id || item.uniqueId}</div>
+                        <div><span class="text-gray-500">生产厂家:</span> ${item.manufacturer || 'N/A'}</div>
+                        <div><span class="text-gray-500">浓度:</span> ${item.concentration || 'N/A'}</div>
+                        <div><span class="text-gray-500">不确定度:</span> ${item.uncertainty || 'N/A'}</div>
+                        <div><span class="text-gray-500">稀释条件:</span> ${item.storage_condition || item.storageCondition || 'N/A'}</div>
+                        <div><span class="text-gray-500">数量:</span> ${item.quantity}</div>
+                        <div><span class="text-gray-500">有效期:</span> ${item.expiry_date || item.expiryDate}</div>
+                        <div><span class="text-gray-500">状态:</span> <span class="status-badge status-${item.status}">${statusText}</span></div>
+                        <div><span class="text-gray-500">创建时间:</span> ${new Date(item.created_at || item.createdAt).toLocaleString('zh-CN')}</div>
+                    </div>
+                    
+                    ${imagesHtml}
+                    
+                    <div class="flex space-x-3">
+                        <button onclick="quickOut('${item.id}'); closeViewDetailModal();" class="flex-1 btn btn-warning">出库</button>
+                        <button onclick="closeViewDetailModal()" class="flex-1 btn btn-secondary">关闭</button>
+                    </div>
+                </div>
+            `
+            
+            document.getElementById('viewDetailModal').classList.add('show')
+        }
+
+        function closeViewDetailModal() {
+            document.getElementById('viewDetailModal').classList.remove('show')
+        }
+
+        // ==================== 记录管理 ====================
+        async function addRecord(type, materialName, quantity, note, images = []) {
+            const record = {
+                type,
+                material_name: materialName,
+                quantity,
+                operator_id: currentUser?.id,
+                operator_name: currentUser?.name,
+                note,
+                images
+            }
+            
+            if (isOfflineMode) {
+                record.id = Date.now()
+                record.created_at = new Date().toISOString()
+                const records = LocalStorage.get('records') || []
+                records.push(record)
+                LocalStorage.set('records', records)
+            } else {
+                await supabaseClient.from('operation_records').insert([record])
+            }
+        }
+
+        async function renderRecordsList() {
+            let records = []
+            
+            if (isOfflineMode) {
+                records = LocalStorage.get('records') || []
+            } else {
+                const { data } = await supabaseClient
+                    .from('operation_records')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                records = data || []
+            }
+            
+            const search = document.getElementById('recordsSearchInput')?.value?.toLowerCase() || ''
+            
+            if (search) {
+                records = records.filter(r => 
+                    (r.material_name || r.materialName || '').toLowerCase().includes(search) ||
+                    (r.operator_name || r.operator || '').toLowerCase().includes(search)
+                )
+            }
+            
+            const container = document.getElementById('recordsList')
+            if (records.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-history text-4xl mb-2"></i><p>暂无操作记录</p></div>'
+                return
+            }
+            
+            container.innerHTML = records.map(record => {
+                const icons = { in: 'fa-archive text-blue-500', out: 'fa-sign-out text-green-500', warning: 'fa-exclamation-triangle text-yellow-500' }
+                const types = { in: '入库', out: '出库', warning: '预警' }
+                const badges = { in: 'bg-blue-100 text-blue-800', out: 'bg-green-100 text-green-800', warning: 'bg-yellow-100 text-yellow-800' }
+                
+                let imagesHtml = ''
+                const images = record.images || []
+                if (images.length > 0) {
+                    imagesHtml = `
+                        <div class="record-images mt-3">
+                            ${images.map((img, idx) => `
+                                <div class="record-image-item" onclick="viewImage('${img}', '${types[record.type]}图片 ${idx + 1}')">
+                                    <img src="${img}" alt="记录图片">
+                                </div>
+                            `).join('')}
+                        </div>
+                    `
+                }
+                
+                return `
+                    <div class="record-item">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-3">
+                                    <i class="fa ${icons[record.type]}"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold">${record.material_name || record.materialName}</h3>
+                                    <p class="text-sm text-gray-500">${record.operator_name || record.operator} · ${new Date(record.created_at || record.date).toLocaleString('zh-CN')}</p>
+                                </div>
+                            </div>
+                            <span class="status-badge ${badges[record.type] || 'bg-gray-100 text-gray-600'}">${types[record.type]}</span>
+                        </div>
+                        <div class="mt-2">
+                            <p class="text-sm">数量: ${record.quantity}</p>
+                            <p class="text-sm text-gray-500">备注: ${record.note}</p>
+                            ${imagesHtml}
+                        </div>
+                    </div>
+                `
+            }).join('')
+        }
+
+        // ==================== 人员管理 ====================
+        async function renderPersonnelList() {
+            let personnel = []
+            
+            if (isOfflineMode) {
+                personnel = LocalStorage.get('personnel') || []
+            } else {
+                const { data } = await supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                personnel = data || []
+            }
+            
+            const search = document.getElementById('personnelSearchInput')?.value?.toLowerCase() || ''
+            
+            if (search) {
+                personnel = personnel.filter(p => 
+                    (p.name || '').toLowerCase().includes(search) ||
+                    (p.username || '').toLowerCase().includes(search)
+                )
+            }
+            
+            const container = document.getElementById('personnelList')
+            if (personnel.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-users text-4xl mb-2"></i><p>暂无人员数据</p></div>'
+                return
+            }
+            
+            container.innerHTML = personnel.map(person => `
+                <div class="personnel-item">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold">${person.name}</h3>
+                            <p class="text-sm text-gray-500">${person.username || person.email}</p>
+                        </div>
+                        <span class="status-badge ${person.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                            ${person.role === 'admin' ? '管理员' : '普通用户'}
+                        </span>
+                    </div>
+                    ${currentUser?.role === 'admin' && person.id !== currentUser?.id ? `
+                        <div class="flex justify-end space-x-2 mt-3">
+                            <button onclick="deletePersonnel('${person.id}')" class="text-danger text-sm">
+                                <i class="fa fa-trash"></i> 删除
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('')
+        }
+
+        function showAddPersonnelModal() {
+            document.getElementById('addPersonnelModal').classList.add('show')
+        }
+
+        function closeAddPersonnelModal() {
+            document.getElementById('addPersonnelModal').classList.remove('show')
+            document.getElementById('addPersonnelForm').reset()
+        }
+
+        async function deletePersonnel(id) {
+            if (!confirm('确定要删除这个人员吗？')) return
+            
+            try {
+                if (isOfflineMode) {
+                    let personnel = LocalStorage.get('personnel') || []
+                    personnel = personnel.filter(p => p.id != id)
+                    LocalStorage.set('personnel', personnel)
+                } else {
+                    // 注意：删除auth用户需要service role，这里仅删除profile
+                    const { error } = await supabaseClient
+                        .from('profiles')
+                        .delete()
+                        .eq('id', id)
+                    if (error) throw error
+                }
+                
+                await renderPersonnelList()
+                alert('删除成功！')
+            } catch (error) {
+                alert('删除失败: ' + error.message)
+            }
+        }
+
+        // ==================== 消息功能 ====================
+        async function openNotificationModal() {
+            document.getElementById('notificationModal').classList.add('show')
+            await renderMessages()
+            await loadMessageRecipients()
+        }
+
+        function closeNotificationModal() {
+            document.getElementById('notificationModal').classList.remove('show')
+        }
+
+        // ==================== 简化的消息功能 ====================
+        
+        // 加载接收人列表
+        async function loadMessageRecipients() {
+            const select = document.getElementById('messageRecipient')
+            select.innerHTML = '<option value="">发给...</option><option value="all">所有人</option>'
+            
+            let personnel = []
+            if (isOfflineMode) {
+                personnel = LocalStorage.get('personnel') || []
+            } else {
+                const { data } = await supabaseClient.from('profiles').select('*')
+                personnel = data || []
+            }
+            
+            personnel.forEach(p => {
+                if (p.id !== currentUser?.id) {
+                    select.innerHTML += `<option value="${p.id}">${p.name}</option>`
+                }
+            })
+        }
+
+        // 渲染消息列表 - 类似微信的聊天界面
+        async function renderMessages() {
+            let messages = []
+            
+            if (isOfflineMode) {
+                messages = LocalStorage.get('messages') || []
+            } else {
+                const { data, error } = await supabaseClient
+                    .from('messages')
+                    .select('*')
+                    .or(`recipient_id.eq.${currentUser?.id},recipient_type.eq.all,sender_id.eq.${currentUser?.id}`)
+                    .order('created_at', { ascending: false })
+                    .limit(50)
+                
+                if (error) {
+                    console.error('获取消息失败:', error)
+                }
+                messages = data || []
+            }
+            
+            const container = document.getElementById('messagesContent')
+            
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state py-8">
+                        <i class="fa fa-comments text-4xl mb-2 text-gray-300"></i>
+                        <p class="text-gray-400">暂无消息</p>
+                    </div>
+                `
+                return
+            }
+            
+            // 按时间倒序显示，最新的在最上面
+            container.innerHTML = messages.map(msg => {
+                const isSentByMe = msg.sender_id === currentUser?.id
+                // 确保 read_by 是数组，并转换为字符串比较
+                const readBy = Array.isArray(msg.read_by) ? msg.read_by : []
+                const currentUserId = currentUser?.id?.toString()
+                const isUnread = !isSentByMe && !readBy.some(id => id?.toString() === currentUserId)
+                const time = new Date(msg.created_at).toLocaleString('zh-CN', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                })
+                
+                if (isSentByMe) {
+                    // 我发送的消息 - 右侧显示
+                    return `
+                        <div class="flex justify-end mb-3" data-msg-id="${msg.id}">
+                            <div class="max-w-[75%]">
+                                <div class="bg-primary text-white p-3 rounded-2xl rounded-tr-sm shadow-sm">
+                                    <p class="text-sm">${escapeHtml(msg.content)}</p>
+                                </div>
+                                <div class="text-right mt-1">
+                                    <span class="text-xs text-gray-400">${time}</span>
+                                    <span class="text-xs text-success ml-1">
+                                        <i class="fa fa-check"></i> 已读 ${(msg.read_by || []).length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `
+                } else {
+                    // 收到的消息 - 左侧显示
+                    return `
+                        <div class="flex justify-start mb-3" data-msg-id="${msg.id}" onclick="markAsRead('${msg.id}')">
+                            <div class="max-w-[75%]">
+                                <div class="flex items-center mb-1">
+                                    <span class="text-xs text-gray-500 font-medium">${msg.sender_name}</span>
+                                    ${isUnread ? '<span class="ml-2 w-2 h-2 bg-red-500 rounded-full"></span>' : ''}
+                                </div>
+                                <div class="bg-white border border-gray-200 p-3 rounded-2xl rounded-tl-sm shadow-sm">
+                                    <p class="text-sm text-gray-800">${escapeHtml(msg.content)}</p>
+                                </div>
+                                <div class="mt-1">
+                                    <span class="text-xs text-gray-400">${time}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `
+                }
+            }).join('')
+        }
+
+        // 发送简单消息
+        async function sendSimpleMessage(e) {
+            e.preventDefault()
+
+            const recipientSelect = document.getElementById('messageRecipient')
+            const contentInput = document.getElementById('messageContent')
+            const recipient = recipientSelect.value
+            const content = contentInput.value.trim()
+
+            if (!recipient) {
+                alert('请选择接收人')
+                return
+            }
+            if (!content) {
+                alert('请输入消息内容')
+                return
+            }
+
+            showLoading(true)
+            try {
+                // 准备消息数据（不包含id，让数据库自动生成）
+                const message = {
+                    sender_id: currentUser?.id,
+                    sender_name: currentUser?.name || '未知用户',
+                    recipient_id: recipient === 'all' ? null : recipient,
+                    recipient_type: recipient === 'all' ? 'all' : 'user',
+                    content: content,
+                    read_by: [currentUser?.id], // 发送者自动标记为已读
+                    created_at: new Date().toISOString()
+                }
+
+                if (isOfflineMode) {
+                    message.id = Date.now().toString()
+                    const messages = LocalStorage.get('messages') || []
+                    messages.unshift(message)
+                    LocalStorage.set('messages', messages)
+                } else {
+                    const { data, error } = await supabaseClient.from('messages').insert([message]).select()
+                    if (error) {
+                        console.error('Supabase插入错误:', error)
+                        throw new Error(error.message || '发送失败')
+                    }
+                    console.log('消息发送成功:', data)
+                }
+
+                // 清空输入框
+                contentInput.value = ''
+                recipientSelect.value = ''
+
+                // 刷新消息列表
+                await renderMessages()
+                await updateNotificationBadge()
+
+            } catch (error) {
+                console.error('发送失败:', error)
+                alert('发送失败: ' + (error.message || '未知错误'))
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        // 标记消息为已读
+        async function markAsRead(msgId) {
+            const currentUserId = currentUser?.id?.toString()
+            if (!currentUserId) return
+
+            if (isOfflineMode) {
+                const messages = LocalStorage.get('messages') || []
+                const msg = messages.find(m => m.id == msgId)
+                if (msg && msg.sender_id !== currentUser?.id) {
+                    const readBy = Array.isArray(msg.read_by) ? msg.read_by : []
+                    if (!readBy.some(id => id?.toString() === currentUserId)) {
+                        readBy.push(currentUser?.id)
+                        msg.read_by = readBy
+                        LocalStorage.set('messages', messages)
+                        await renderMessages()
+                        await updateNotificationBadge()
+                    }
+                }
+            } else {
+                const { data, error } = await supabaseClient
+                    .from('messages')
+                    .select('read_by, sender_id')
+                    .eq('id', msgId)
+                    .single()
+
+                if (error || !data) {
+                    console.error('获取消息失败:', error)
+                    return
+                }
+
+                // 不标记自己发送的消息
+                if (data.sender_id === currentUser?.id) return
+
+                const readBy = Array.isArray(data.read_by) ? data.read_by : []
+
+                // 检查是否已经读过（使用字符串比较）
+                if (!readBy.some(id => id?.toString() === currentUserId)) {
+                    const newReadBy = [...readBy, currentUser?.id]
+
+                    const { error: updateError } = await supabaseClient
+                        .from('messages')
+                        .update({ read_by: newReadBy })
+                        .eq('id', msgId)
+
+                    if (updateError) {
+                        console.error('标记已读失败:', updateError)
+                        return
+                    }
+
+                    await renderMessages()
+                    await updateNotificationBadge()
+                }
+            }
+        }
+
+        // 更新通知徽章
+        async function updateNotificationBadge() {
+            if (!currentUser) {
+                document.getElementById('notificationCount').classList.add('hidden')
+                return
+            }
+
+            const currentUserId = currentUser?.id?.toString()
+            let count = 0
+
+            try {
+                if (isOfflineMode) {
+                    const messages = LocalStorage.get('messages') || []
+                    count = messages.filter(msg => {
+                        const isRecipient = msg.recipient_type === 'all' || msg.recipient_id === currentUser?.id
+                        const isNotSender = msg.sender_id !== currentUser?.id
+                        const readBy = Array.isArray(msg.read_by) ? msg.read_by : []
+                        const isNotRead = !readBy.some(id => id?.toString() === currentUserId)
+                        return isRecipient && isNotSender && isNotRead
+                    }).length
+                } else {
+                    const { data, error } = await supabaseClient
+                        .from('messages')
+                        .select('read_by, sender_id, recipient_id, recipient_type')
+                        .or(`recipient_id.eq.${currentUser?.id},recipient_type.eq.all`)
+
+                    if (error) {
+                        console.error('查询消息失败:', error)
+                    } else if (data) {
+                        count = data.filter(msg => {
+                            // 排除自己发送的消息
+                            if (msg.sender_id === currentUser?.id) return false
+
+                            // 检查是否已读
+                            const readBy = Array.isArray(msg.read_by) ? msg.read_by : []
+                            return !readBy.some(id => id?.toString() === currentUserId)
+                        }).length
+                    }
+                }
+            } catch (error) {
+                console.error('更新徽章失败:', error)
+            }
+
+            const badge = document.getElementById('notificationCount')
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count
+                badge.classList.remove('hidden')
+            } else {
+                badge.classList.add('hidden')
+            }
+        }
+
+        // ==================== 扫码功能 ====================
+        let scanStream = null
+        let isScanning = false
+
+        function showScanModal() {
+            document.getElementById('scanModal').classList.add('show')
+            document.getElementById('scanInput').value = ''
+            document.getElementById('scanResult').classList.add('hidden')
+            // 自动聚焦输入框
+            setTimeout(() => document.getElementById('scanInput').focus(), 100)
+        }
+
+        function closeScanModal() {
+            stopCameraScan()
+            document.getElementById('scanModal').classList.remove('show')
+        }
+
+        // 启动摄像头扫描
+        async function startCameraScan() {
+            const video = document.getElementById('scanVideo')
+            const loading = document.getElementById('scanLoading')
+            
+            loading.classList.remove('hidden')
+            
+            try {
+                scanStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                })
+                video.srcObject = scanStream
+                video.play()
+                isScanning = true
+                loading.classList.add('hidden')
+                scanFrame()
+            } catch (error) {
+                console.error('摄像头启动失败:', error)
+                loading.classList.add('hidden')
+                alert('无法启动摄像头，请确保已授予摄像头权限，或使用手动输入方式')
+            }
+        }
+
+        // 停止摄像头扫描
+        function stopCameraScan() {
+            isScanning = false
+            if (scanStream) {
+                scanStream.getTracks().forEach(track => track.stop())
+                scanStream = null
+            }
+            const video = document.getElementById('scanVideo')
+            video.srcObject = null
+        }
+
+        // 扫描帧
+        function scanFrame() {
+            if (!isScanning) return
+            
+            const video = document.getElementById('scanVideo')
+            const canvas = document.getElementById('scanCanvas')
+            const ctx = canvas.getContext('2d')
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth
+                canvas.height = video.videoHeight
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'attemptBoth'
+                })
+                
+                if (code) {
+                    // 扫描成功
+                    stopCameraScan()
+                    handleScannedCode(code.data)
+                    return
+                }
+            }
+            
+            requestAnimationFrame(scanFrame)
+        }
+
+        // 处理扫描到的二维码
+        async function handleScannedCode(data) {
+            // 尝试解析二维码数据
+            let searchTerm = data.trim()
+            
+            // 如果二维码包含URL，尝试提取唯一标识
+            try {
+                const url = new URL(searchTerm)
+                const params = new URLSearchParams(url.search)
+                if (params.has('id')) {
+                    searchTerm = params.get('id')
+                }
+            } catch (e) {
+                // 不是URL，直接使用
+            }
+            
+            document.getElementById('scanInput').value = searchTerm
+            await searchAndShowResult(searchTerm)
+        }
+
+        // 处理扫码输入
+        async function handleScan() {
+            const input = document.getElementById('scanInput').value.trim()
+            if (!input) {
+                alert('请输入唯一标识码')
+                return
+            }
+            
+            await searchAndShowResult(input)
+        }
+
+        // 监听回车键
+        document.addEventListener('DOMContentLoaded', function() {
+            const scanInput = document.getElementById('scanInput')
+            if (scanInput) {
+                scanInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        handleScan()
+                    }
+                })
+            }
+        })
+
+        // 搜索并显示结果
+        async function searchAndShowResult(searchTerm) {
+            let stock = []
+            if (isOfflineMode) {
+                stock = LocalStorage.get('stock') || []
+            } else {
+                const { data } = await supabaseClient.from('stock_items').select('*')
+                stock = data || []
+            }
+            
+            // 搜索匹配项（支持唯一标识、名称、编号）
+            const item = stock.find(s => 
+                (s.unique_id || s.uniqueId) === searchTerm ||
+                s.name === searchTerm ||
+                s.code === searchTerm ||
+                s.id == searchTerm
+            )
+            
+            const resultDiv = document.getElementById('scanResult')
+            
+            if (item) {
+                resultDiv.innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold text-lg text-green-800">${item.name}</h3>
+                            <span class="px-2 py-1 rounded text-xs ${item.status === 'normal' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
+                                ${item.status === 'normal' ? '正常' : '即将过期'}
+                            </span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <p><span class="text-gray-500">编号：</span>${item.code}</p>
+                            <p><span class="text-gray-500">唯一标识：</span>${item.unique_id || item.uniqueId}</p>
+                            <p><span class="text-gray-500">批次号：</span>${item.batch_number || item.batchNumber}</p>
+                            <p><span class="text-gray-500">有效期：</span>${item.expiry_date || item.expiryDate}</p>
+                        </div>
+                        <div class="flex gap-2 mt-4">
+                            <button onclick="directOut('${item.id}')" class="btn btn-success flex-1">
+                                <i class="fa fa-sign-out mr-1"></i>直接出库
+                            </button>
+                            <button onclick="scanViewDetail('${item.id}')" class="btn btn-secondary flex-1">
+                                <i class="fa fa-eye mr-1"></i>详情
+                            </button>
+                        </div>
+                    </div>
+                `
+                resultDiv.classList.remove('hidden')
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                        <div class="flex items-center">
+                            <i class="fa fa-exclamation-circle text-red-500 mr-2 text-xl"></i>
+                            <div>
+                                <p class="font-medium text-red-800">未找到匹配项</p>
+                                <p class="text-sm text-red-600">未找到唯一标识为 "${searchTerm}" 的标准物质</p>
+                            </div>
+                        </div>
+                    </div>
+                `
+                resultDiv.classList.remove('hidden')
+            }
+        }
+
+        // 直接出库（无需选择）
+        async function directOut(id) {
+            if (!confirm('确定要出库该物品吗？')) return
+            
+            showLoading(true)
+            try {
+                let stockItem = null
+                
+                if (isOfflineMode) {
+                    const stock = LocalStorage.get('stock') || []
+                    stockItem = stock.find(s => s.id == id)
+                    if (stockItem) {
+                        const newStock = stock.filter(s => s.id != id)
+                        LocalStorage.set('stock', newStock)
+                    }
+                } else {
+                    const { data } = await supabaseClient
+                        .from('stock_items')
+                        .select('*')
+                        .eq('id', id)
+                        .single()
+                    stockItem = data
+                    
+                    if (stockItem) {
+                        await supabaseClient
+                            .from('stock_items')
+                            .delete()
+                            .eq('id', id)
+                    }
+                }
+                
+                if (!stockItem) throw new Error('库存不存在')
+                
+                // 添加出库记录
+                await addRecord('out', stockItem.name, 1, `扫码出库，唯一性标识: ${stockItem.unique_id || stockItem.uniqueId}`, [])
+                
+                closeScanModal()
+                await refreshAllData()
+                alert('出库成功！')
+            } catch (error) {
+                alert('出库失败: ' + error.message)
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        // 扫码后查看详情
+        function scanViewDetail(id) {
+            closeScanModal()
+            viewStockDetail(id)
+        }
+
+        // ==================== 二维码功能 ====================
+        function showQRCode(id, uniqueId, name) {
+            const modal = document.getElementById('qrCodeModal')
+            const container = document.getElementById('qrCodeContainer')
+            
+            document.getElementById('qrItemName').textContent = name
+            document.getElementById('qrItemUniqueId').textContent = uniqueId
+            
+            // 生成二维码数据（使用唯一标识）
+            const qrData = uniqueId
+            
+            // 使用 QRCode.js 生成二维码
+            container.innerHTML = ''
+            
+            // 创建 canvas 元素
+            const canvas = document.createElement('canvas')
+            container.appendChild(canvas)
+            
+            QRCode.toCanvas(canvas, qrData, {
+                width: 200,
+                height: 200,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
+            }, function(error) {
+                if (error) {
+                    console.error('二维码生成失败:', error)
+                    container.innerHTML = '<p class="text-red-500">二维码生成失败</p>'
+                }
+            })
+            
+            modal.classList.add('show')
+        }
+
+        function closeQRCodeModal() {
+            document.getElementById('qrCodeModal').classList.remove('show')
+        }
+
+        // ==================== 设置功能 ====================
+        function showChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.add('show')
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.remove('show')
+            document.getElementById('changePasswordForm').reset()
+        }
+
+        async function handleChangePassword(e) {
+            e.preventDefault()
+            showLoading(true)
+            
+            const newPassword = e.target.newPassword.value
+            const confirmPassword = e.target.confirmPassword.value
+            
+            if (newPassword !== confirmPassword) {
+                alert('两次输入的密码不一致！')
+                showLoading(false)
+                return
+            }
+            
+            try {
+                if (isOfflineMode) {
+                    // 离线模式更新密码
+                    let personnel = LocalStorage.get('personnel') || []
+                    const user = personnel.find(p => p.id == currentUser.id)
+                    if (user) {
+                        user.password = newPassword
+                        LocalStorage.set('personnel', personnel)
+                        currentUser.password = newPassword
+                        LocalStorage.set('currentUser', currentUser)
+                    }
+                } else {
+                    const { error } = await supabaseClient.auth.updateUser({
+                        password: newPassword
+                    })
+                    if (error) throw error
+                }
+                
+                closeChangePasswordModal()
+                alert('密码修改成功！')
+            } catch (error) {
+                alert('修改失败: ' + error.message)
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        // ==================== Excel导出 ====================
+        async function exportData() {
+            showLoading(true)
+            try {
+                let stock = []
+                let records = []
+                let personnel = []
+                
+                if (isOfflineMode) {
+                    stock = LocalStorage.get('stock') || []
+                    records = LocalStorage.get('records') || []
+                    personnel = LocalStorage.get('personnel') || []
+                } else {
+                    // 在线模式下从Supabase获取数据
+                    const [{ data: stockData }, { data: recordsData }, { data: personnelData }] = await Promise.all([
+                        supabaseClient.from('stock_items').select('*'),
+                        supabaseClient.from('operation_records').select('*').order('created_at', { ascending: false }),
+                        supabaseClient.from('profiles').select('*')
+                    ])
+                    stock = stockData || []
+                    records = recordsData || []
+                    personnel = personnelData || []
+                }
+                
+                const wb = XLSX.utils.book_new()
+                
+                // 库存数据
+                const stockData = stock.map(item => ({
+                    '标准物质名称': item.name,
+                    '编号': item.code,
+                    '批次号': item.batch_number || item.batchNumber,
+                    '唯一标识': item.unique_id || item.uniqueId,
+                    '数量': item.quantity,
+                    '有效期': item.expiry_date || item.expiryDate,
+                    '状态': item.status
+                }))
+                
+                const stockWS = XLSX.utils.json_to_sheet(stockData)
+                XLSX.utils.book_append_sheet(wb, stockWS, "库存数据")
+                
+                // 记录数据
+                const recordsData = records.map(r => ({
+                    '类型': r.type === 'in' ? '入库' : '出库',
+                    '物质名称': r.material_name || r.materialName,
+                    '数量': r.quantity,
+                    '操作人': r.operator_name || r.operator,
+                    '时间': new Date(r.created_at || r.date).toLocaleString('zh-CN'),
+                    '备注': r.note
+                }))
+                
+                const recordsWS = XLSX.utils.json_to_sheet(recordsData)
+                XLSX.utils.book_append_sheet(wb, recordsWS, "操作记录")
+                
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' })
+                const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' })
+                const link = document.createElement('a')
+                link.href = URL.createObjectURL(blob)
+                link.download = `标准物质管理数据_${new Date().toISOString().slice(0, 10)}.xlsx`
+                link.click()
+                
+                showToast('数据导出成功', 'success')
+            } catch (error) {
+                console.error('导出失败:', error)
+                showToast('导出失败: ' + error.message, 'error')
+            } finally {
+                showLoading(false)
+            }
+        }
+
+        function s2ab(s) {
+            const buf = new ArrayBuffer(s.length)
+            const view = new Uint8Array(buf)
+            for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF
+            return buf
+        }
+
+        // ==================== Excel导入 ====================
+        function importData() {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = '.xlsx,.xls'
+            input.onchange = async (e) => {
+                const file = e.target.files[0]
+                if (!file) return
+                
+                showLoading(true)
+                try {
+                    const data = await file.arrayBuffer()
+                    const workbook = XLSX.read(data, { type: 'array' })
+                    
+                    let importCount = 0
+                    
+                    // 导入库存数据
+                    const stockSheet = workbook.Sheets['库存数据']
+                    if (stockSheet) {
+                        const stockData = XLSX.utils.sheet_to_json(stockSheet)
+                        const formattedStock = stockData.map(row => ({
+                            id: generateId(),
+                            name: row['标准物质名称'] || '',
+                            code: row['编号'] || '',
+                            batch_number: row['批次号'] || '',
+                            unique_id: row['唯一标识'] || '',
+                            quantity: parseInt(row['数量']) || 0,
+                            expiry_date: row['有效期'] || '',
+                            status: row['状态'] || '正常',
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }))
+                        
+                        if (isOfflineMode) {
+                            const existing = LocalStorage.get('stock') || []
+                            LocalStorage.set('stock', [...existing, ...formattedStock])
+                        } else {
+                            // 在线模式：批量插入到Supabase
+                            for (const item of formattedStock) {
+                                await supabaseClient.from('stock_items').insert([item])
+                            }
+                        }
+                        importCount += formattedStock.length
+                    }
+                    
+                    // 导入记录数据
+                    const recordsSheet = workbook.Sheets['操作记录']
+                    if (recordsSheet) {
+                        const recordsData = XLSX.utils.sheet_to_json(recordsSheet)
+                        const formattedRecords = recordsData.map(row => ({
+                            id: generateId(),
+                            type: row['类型'] === '入库' ? 'in' : 'out',
+                            material_name: row['物质名称'] || '',
+                            quantity: parseInt(row['数量']) || 0,
+                            operator_name: row['操作人'] || '',
+                            note: row['备注'] || '',
+                            created_at: new Date().toISOString()
+                        }))
+                        
+                        if (isOfflineMode) {
+                            const existing = LocalStorage.get('records') || []
+                            LocalStorage.set('records', [...existing, ...formattedRecords])
+                        } else {
+                            // 在线模式：批量插入到Supabase
+                            for (const record of formattedRecords) {
+                                await supabaseClient.from('operation_records').insert([record])
+                            }
+                        }
+                        importCount += formattedRecords.length
+                    }
+                    
+                    showToast(`成功导入 ${importCount} 条数据`, 'success')
+                    
+                    // 刷新页面数据
+                    if (typeof loadDashboardData === 'function') loadDashboardData()
+                    if (typeof loadStockData === 'function') loadStockData()
+                    if (typeof loadRecordsData === 'function') loadRecordsData()
+                    
+                } catch (error) {
+                    console.error('导入失败:', error)
+                    showToast('导入失败: ' + error.message, 'error')
+                } finally {
+                    showLoading(false)
+                }
+            }
+            input.click()
+        }
+
+        // ==================== 离线模式切换 ====================
+        function toggleOfflineMode() {
+            // 切换离线模式状态
+            isOfflineMode = !isOfflineMode
+            LocalStorage.set('offlineMode', isOfflineMode)
+            
+            const status = document.getElementById('offlineStatus')
+            if (status) status.textContent = isOfflineMode ? '当前: 离线' : '当前: 在线'
+            
+            if (isOfflineMode) {
+                // 切换到离线模式，初始化本地数据
+                if (!LocalStorage.get('personnel')) {
+                    LocalStorage.set('personnel', [
+                        { id: '1', name: '系统管理员', username: 'admin@example.com', password: 'admin123', role: 'admin' }
+                    ])
+                }
+                alert('已切换到离线模式，数据将保存在本地')
+            } else {
+                alert('已切换到在线模式，请重新登录')
+                location.reload()
+            }
+        }
+
+        // ==================== 数据管理 ====================
+        function clearAllData() {
+            if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return
+            
+            if (isOfflineMode) {
+                LocalStorage.set('stock', [])
+                LocalStorage.set('records', [])
+                LocalStorage.set('messages', [])
+            } else {
+                alert('在线模式下无法一键清空，请使用Supabase Dashboard')
+                return
+            }
+            
+            refreshAllData()
+            alert('所有数据已清空！')
+        }
+
+        // ==================== 实时订阅 ====================
+        function setupRealtimeSubscriptions() {
+            // 订阅库存变化
+            supabaseClient
+                .channel('stock_changes')
+                .on('postgres_changes', 
+                    { event: '*', schema: 'public', table: 'stock_items' },
+                    (payload) => {
+                        console.log('库存变化:', payload)
+                        refreshDashboard()
+                        renderStockList()
+                    }
+                )
+                .subscribe()
+            
+            // 订阅新消息
+            supabaseClient
+                .channel('new_messages')
+                .on('postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'messages' },
+                    (payload) => {
+                        console.log('新消息:', payload)
+                        updateNotificationBadge()
+                        // 显示通知
+                        if (payload.new.sender_id !== currentUser?.id) {
+                            showNotification('新消息', payload.new.content)
+                        }
+                    }
+                )
+                .subscribe()
+        }
+
+        function showNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, { body })
+            }
+        }
+
+        // ==================== 通用功能 ====================
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay')
+            if (show) overlay.classList.add('show')
+            else overlay.classList.remove('show')
+        }
+
+        function closeModalOnBg(event, modalId) {
+            if (event.target.id === modalId) {
+                document.getElementById(modalId).classList.remove('show')
+            }
+        }
+
+        function showRegisterModal() {
+            document.getElementById('registerModal').classList.add('show')
+        }
+
+        function closeRegisterModal() {
+            document.getElementById('registerModal').classList.remove('show')
+            document.getElementById('registerForm').reset()
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div')
+            div.textContent = text
+            return div.innerHTML
+        }
+
+        function previewImages(input, previewId) {
+            const preview = document.getElementById(previewId)
+            const placeholder = preview.nextElementSibling
+            
+            if (input.files.length > 3) {
+                alert('最多只能上传3张图片')
+                input.value = ''
+                return
+            }
+            
+            preview.innerHTML = ''
+            preview.classList.remove('hidden')
+            placeholder.classList.add('hidden')
+            
+            Array.from(input.files).forEach((file) => {
+                const reader = new FileReader()
+                reader.onload = function(e) {
+                    preview.innerHTML += `
+                        <div class="image-preview-item">
+                            <img src="${e.target.result}" alt="">
+                            <button type="button" onclick="this.parentElement.remove(); checkPreviewEmpty('${previewId}')" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                    `
+                }
+                reader.readAsDataURL(file)
+            })
+        }
+
+        function checkPreviewEmpty(previewId) {
+            const preview = document.getElementById(previewId)
+            const placeholder = preview.nextElementSibling
+            if (preview.children.length === 0) {
+                preview.classList.add('hidden')
+                placeholder.classList.remove('hidden')
+            }
+        }
+
+        function viewImage(imageData, caption) {
+            document.getElementById('viewerImage').src = imageData
+            document.getElementById('viewerCaption').textContent = caption
+            document.getElementById('imageViewerModal').classList.add('show')
+        }
+
+        function closeImageViewer() {
+            document.getElementById('imageViewerModal').classList.remove('show')
+        }
+    </script>
+</body>
+</html>
